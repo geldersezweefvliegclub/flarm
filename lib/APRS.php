@@ -82,8 +82,6 @@ class APRS {
       $this->debug( "Read 0 after select");
       return true;
     }
-    $this->debug("Data length: " . $res);
-    $this->debug("Buffer: " . $buffer);
     return $this->parse_buffer_into_array_of_single_data_strings($buffer);
   }
 
@@ -124,7 +122,7 @@ class APRS {
         } else {
           return $data;
         }
-      } else return true;
+      } else return $data;
     } else {
       if ($this->socket_error) {
         $this->disconnect();
