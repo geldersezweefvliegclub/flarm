@@ -1,6 +1,6 @@
 <?php
 include_once 'TimeStamp.php';
-include_once 'utils/enums.php';
+include_once 'enum/AprsAircraftType.php';
 
 class OgnSenderBeaconMessage {
   public string $flarm_id;

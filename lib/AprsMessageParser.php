@@ -9,17 +9,26 @@ http://wiki.glidernet.org/wiki:ogn-flavoured-aprs
 */
 include_once 'OgnSenderBeaconMessage.php';
 include_once 'TimeStamp.php';
-include_once 'utils/enums.php';
+include_once 'enum/AprsAircraftType.php';
 
 class AprsMessageParser {
   public OgnSenderBeaconMessage $ogn_sender_beacon_message;
 
   public function __construct($line_item) {
     $this->ogn_sender_beacon_message = new OgnSenderBeaconMessage($line_item);
-    $this->parse_beacon_message($line_item);
   }
 
-  private function parse_beacon_message(string $msg): void {
+  public function get_flarm_id() : bool|string {
+    $result = preg_match('/(id)([a-f\d]{2})([a-f\d]{6})/i', $this->ogn_sender_beacon_message->original_message, $matches);
+    if ($result === 1) {
+      return $matches[3];
+    } else {
+      return false;
+    }
+  }
+
+  public function parse_beacon_message(): void {
+    $msg = $this->ogn_sender_beacon_message->original_message;
     do {
       if (str_starts_with($msg, "#")) {
         unset($this->ogn_sender_beacon_message);

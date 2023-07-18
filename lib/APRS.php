@@ -1,5 +1,7 @@
 <?php
 
+include 'lib/Debug.php';
+
 class APRS {
   private string $call_sign;
   private int $passcode;
@@ -9,15 +11,16 @@ class APRS {
   private bool $connected;
   
 
-  public bool $_debug;
+  private Debug $debug;
 
   private bool $socket_error;
 
-  private int $last_connection_attempt;
+  private ?int $last_connection_attempt;
   private int $conn_delay;
   private string $server;
   private int $port;
   private string $version;
+
 
 
   public function __construct($server, $port, $call_sign, $passcode, $filter = '')
@@ -33,15 +36,15 @@ class APRS {
     $this->connected = false;
     $this->socket_error = false;
 
-    $this->last_connection_attempt = 1;
+    $this->last_connection_attempt = null;
     $this->conn_delay = 5;
 
-    $this->_debug = false;
+    $this->debug = new Debug();
 
   }
 
   private function set_socket_error($err_msg): void {
-    $this->debug( $err_msg . socket_strerror(socket_last_error()));
+    $this->debug->echo( $err_msg . socket_strerror(socket_last_error()));
     $this->socket_error = true;
   }
 
@@ -52,7 +55,7 @@ class APRS {
 
   private function check_for_socket_read_data(): bool {
     $read[] = $this->socket;
-    $this->debug("before select");
+    $this->debug->echo("before select");
 
     $w = null;
     $e = null;
@@ -64,7 +67,7 @@ class APRS {
     }
     elseif($res===0){
       // no messages
-      $this->debug("no messages");
+      $this->debug->echo("no messages");
       return false;
     }
 
@@ -79,19 +82,34 @@ class APRS {
     }
     elseif($res===0){
       $this->disconnect();
-      $this->debug( "Read 0 after select");
+      $this->debug->echo( "Read 0 after select");
       return true;
     }
     return $this->parse_buffer_into_array_of_single_data_strings($buffer);
   }
 
-  public function run(): array {  //Should this send a keep alive???
+  public function run(): array {
+    $this->keep_alive();
     $data_array = $this->io_loop();
     if (!is_array($data_array)) {
       $data_array = array();
     }
     return $data_array;
 
+  }
+
+  private function keep_alive(): void {
+    if ($this->last_connection_attempt) {
+      $elapsed_time = time() - $this->last_connection_attempt;
+      $this->debug->echo("Elapsed time: {$elapsed_time}", );
+      if ($elapsed_time >= 180) {
+        $this->send("#Keep alive");
+        $this->debug->echo("Keep alive sent.");
+        $this->last_connection_attempt = time();
+      }
+    } else {
+      $this->last_connection_attempt = time();
+    }
   }
 
   private function parse_buffer_into_array_of_single_data_strings(string $buffer): array {
@@ -105,12 +123,12 @@ class APRS {
 
   private function io_loop(): bool|array {
     if(!$this->connected) {
-      $this->debug("Connection closed, trying to re-connect...");
+      $this->debug->echo("Connection closed, trying to re-connect...");
       if(!$this->connect()) {
-        $this->debug("Re-connection attempt failed");
+        $this->debug->echo("Re-connection attempt failed");
         return false;
       };
-      $this->debug("Reconnected!");
+      $this->debug->echo("Reconnected!");
     }
 
     if ($this->check_for_socket_read_data()){
@@ -133,19 +151,17 @@ class APRS {
   }
 
   public function connect(): bool {
-    if ($this->_debug) {
-      echo "Trying to connect...";
-    }
+    $this->debug->echo("Trying to connect...");
 
     if ($this->connected) {
-      $this->debug("Already connected!");
+      $this->debug->echo("Already connected!");
       return false;
     }
 
     $conn_interval = time() - $this->last_connection_attempt;
 
     if( $conn_interval < $this->conn_delay){
-      $this->debug("Last connection attempt was $conn_interval seconds ago, waiting..");
+      $this->debug->echo("Last connection attempt was $conn_interval seconds ago, waiting..");
       return false;
     }
 
@@ -174,20 +190,16 @@ class APRS {
     return true;
   }
 
-  private function keep_alive(): void {
-    $this->send("#Keep alive");
-  }
-
   private function send($data): bool|int {
     $res=socket_send($this->socket,$data,strlen($data),0);
     if($res<=0)
     {
-      $this->debug("socket send returned $res");
+      $this->debug->echo("socket send returned $res");
       $this->disconnect();
     }
     else
     {
-      $this->debug("sent ($res): $data");
+      $this->debug->echo("sent ($res): $data");
     }
     return($res);
   }
@@ -199,12 +211,6 @@ class APRS {
     socket_close($this->socket);
     $this->connected = false;
     $this->clear_socket_error();
-  }
-
-  private function debug($str): void {
-    if($this->_debug === true) {
-      echo "debug: $str\n";
-    }
   }
 
 }
