@@ -12,13 +12,9 @@ include_once 'include/config.php';
 include_once 'include/constants.php';
 include_once 'lib/Curl.php';
 include_once 'lib/Debug.php';
+include_once 'lib/ProgramTimer.php';
 
 $debug = new Debug();
-
-//Grab current local time for time variant execution.
-date_default_timezone_set("Europe/Amsterdam");
-$date = date('d-m-Y');
-$time = date('G:i');
 
 //create an array of all aircraft we are concerned about indexed by flarm ID
 $terlet_aircraft_array = load_aircraft();
@@ -28,23 +24,41 @@ $previously_checked_aircraft = array();
 $aprs = new APRS(SERVER, PORT, MYCALL, PASSCODE, FILTER);
 
 
-$aprs->connect();  //should this be automatic in run???
+$program_timer = new ProgramTimer(PROGRAM_START_TIME_HOUR, PROGRAM_END_TIME_HOUR);
+
 while (1) {
-  // handle any received APRS messages
-  $data_array = $aprs->run();
-  foreach($data_array as $data) {
-    $aprs_message_parser = new AprsMessageParser($data);
-    $flarm_id = $aprs_message_parser->get_flarm_id();
-    if ($flarm_id) {
-      if (!array_key_exists(strtolower($flarm_id), $previously_checked_aircraft)) {
-        if (isset($terlet_aircraft_array[strtolower($flarm_id)])) {
-          $aircraft_db_id = $terlet_aircraft_array[strtolower($flarm_id)]->id;
-          $result = register_aircraft($aircraft_db_id);
-          $debug->echo($data);
-          $debug->echo("REGISTERED ".$terlet_aircraft_array[strtolower($flarm_id)]->callsign);
-          $previously_checked_aircraft[strtolower($flarm_id)] = $result;
+  /*
+   * Check time.  If time after START_TIME but before END_TIME, connect and run
+   * If time after END_TIME and before START_TIME, disconnect.
+   */
+  if ($program_timer->can_run()) {
+    $debug->echo("Can Run");
+    if (!$aprs->is_connected()) {
+      $aprs->connect();
+    }
+
+    // handle any received APRS messages
+    $data_array = $aprs->run();
+    foreach($data_array as $data) {
+      $aprs_message_parser = new AprsMessageParser($data);
+      $flarm_id = $aprs_message_parser->get_flarm_id();
+      if ($flarm_id) {
+        if (!array_key_exists(strtolower($flarm_id), $previously_checked_aircraft)) {
+          if (isset($terlet_aircraft_array[strtolower($flarm_id)])) {
+            $aircraft_db_id = $terlet_aircraft_array[strtolower($flarm_id)]->id;
+            $result = register_aircraft($aircraft_db_id);
+            $debug->echo($data);
+            $debug->echo("REGISTERED ".$terlet_aircraft_array[strtolower($flarm_id)]->callsign);
+            $previously_checked_aircraft[strtolower($flarm_id)] = $result;
+          }
         }
       }
+    }
+
+  } else {
+    $debug->echo("Can't Run");
+    if ($aprs->is_connected()) {
+      $aprs->disconnect();
     }
   }
 
@@ -67,7 +81,5 @@ function load_aircraft() : array {
 
 function register_aircraft(string $aircraft_id) : mixed {
   $curl = new Curl();
-  $response = $curl->exec_post(VLIEGTUIGEN_AANMELDEN, ["VLIEGTUIG_ID" => $aircraft_id ]);
-
-  return $response;
+  return $curl->exec_post(VLIEGTUIGEN_AANMELDEN, ["VLIEGTUIG_ID" => $aircraft_id ]);
 }

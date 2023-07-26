@@ -43,6 +43,15 @@ class APRS {
 
   }
 
+  /**
+   * @return bool
+   */
+  public function is_connected(): bool {
+    return $this->connected;
+  }
+
+
+
   private function set_socket_error($err_msg): void {
     $this->debug->echo( $err_msg . socket_strerror(socket_last_error()));
     $this->socket_error = true;
@@ -101,10 +110,9 @@ class APRS {
   private function keep_alive(): void {
     if ($this->last_connection_attempt) {
       $elapsed_time = time() - $this->last_connection_attempt;
-      $this->debug->echo("Elapsed time: {$elapsed_time}", );
       if ($elapsed_time >= 180) {
         $this->send("#Keep alive");
-        $this->debug->echo("Keep alive sent.");
+        $this->debug->echo("Keep alive sent after {$elapsed_time}s");
         $this->last_connection_attempt = time();
       }
     } else {
@@ -206,7 +214,7 @@ class APRS {
 
 
   // marks the connection as disconnected
-  private function disconnect(): void {
+  public function disconnect(): void {
     socket_shutdown($this->socket);
     socket_close($this->socket);
     $this->connected = false;
