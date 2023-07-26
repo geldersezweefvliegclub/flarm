@@ -13,7 +13,7 @@ include_once 'lib/ProgramTimer.php';
 include_once 'lib/CountdownTimer.php';
 
 $debug = new Debug();
-$db_aircraft_load_timer = new CountdownTimer(1,0,0);
+$db_aircraft_load_timer = new CountdownTimer(REFRESH_FROM_AIRCRAFT_DB_HOURS,REFRESH_FROM_AIRCRAFT_DB_MINUTES,REFRESH_FROM_AIRCRAFT_DB_SECONDS);
 
 //create an array of all aircraft we are concerned about indexed by flarm ID
 $db_aircraft_array = load_aircraft();
