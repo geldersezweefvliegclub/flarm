@@ -1,8 +1,6 @@
 <?php
 /*
 TODO: standardize $flarm_id to minimize strtolower if possible
-TODO: clear on end of day the aircraft registered
-TODO: stop running aprs at end of day. start at beginning of day.
 */
 
 include 'lib/APRS.php';
