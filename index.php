@@ -12,12 +12,16 @@ include_once 'include/config.php';
 include_once 'lib/Curl.php';
 include_once 'lib/Debug.php';
 include_once 'lib/ProgramTimer.php';
+include_once 'lib/CountdownTimer.php';
 
 $debug = new Debug();
+$db_aircraft_load_timer = new CountdownTimer(1,0,0);
 
 //create an array of all aircraft we are concerned about indexed by flarm ID
-$terlet_aircraft_array = load_aircraft();
+$db_aircraft_array = load_aircraft();
+$db_aircraft_load_timer->start();
 $previously_checked_aircraft = array();
+
 
 //connect to APRS
 $aprs = new APRS(SERVER, PORT, MYCALL, PASSCODE, FILTER);
@@ -26,14 +30,17 @@ $aprs = new APRS(SERVER, PORT, MYCALL, PASSCODE, FILTER);
 $program_timer = new ProgramTimer(PROGRAM_START_TIME_HOUR, PROGRAM_END_TIME_HOUR);
 
 while (1) {
-  /*
-   * Check time.  If time after START_TIME but before END_TIME, connect and run
-   * If time after END_TIME and before START_TIME, disconnect.
-   */
   if ($program_timer->can_run()) {
     $debug->echo("Can Run");
+    if ($db_aircraft_load_timer->is_timer_expired()) {
+      $db_aircraft_array = load_aircraft();
+      $db_aircraft_load_timer->start();
+    }
+
     if (!$aprs->is_connected()) {
       $aprs->connect();
+      $previously_checked_aircraft = array();
+
     }
 
     // handle any received APRS messages
@@ -43,11 +50,11 @@ while (1) {
       $flarm_id = $aprs_message_parser->get_flarm_id();
       if ($flarm_id) {
         if (!array_key_exists(strtolower($flarm_id), $previously_checked_aircraft)) {
-          if (isset($terlet_aircraft_array[strtolower($flarm_id)])) {
-            $aircraft_db_id = $terlet_aircraft_array[strtolower($flarm_id)]->id;
+          if (isset($db_aircraft_array[strtolower($flarm_id)])) {
+            $aircraft_db_id = $db_aircraft_array[strtolower($flarm_id)]->id;
             $result = register_aircraft($aircraft_db_id);
             $debug->echo($data);
-            $debug->echo("REGISTERED ".$terlet_aircraft_array[strtolower($flarm_id)]->callsign);
+            $debug->echo("REGISTERED ".$db_aircraft_array[strtolower($flarm_id)]->callsign);
             $previously_checked_aircraft[strtolower($flarm_id)] = $result;
           }
         }
