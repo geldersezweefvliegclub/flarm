@@ -9,7 +9,6 @@ include 'lib/APRS.php';
 include 'lib/AprsMessageParser.php';
 include 'lib/DatabaseAircraft.php';
 include_once 'include/config.php';
-include_once 'include/constants.php';
 include_once 'lib/Curl.php';
 include_once 'lib/Debug.php';
 include_once 'lib/ProgramTimer.php';

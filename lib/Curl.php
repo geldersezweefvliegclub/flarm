@@ -1,6 +1,5 @@
 <?php
 include_once 'include/config.php';
-include_once 'include/constants.php';
 
 class Curl {
   private string $base_url;
