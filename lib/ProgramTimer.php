@@ -10,19 +10,15 @@ class ProgramTimer {
   }
 
   private function current_timestamp() : int {
-    $date = new DateTimeImmutable("now");
-    return $date->getTimestamp();
-
+    return (new DateTime("now"))->getTimestamp();
   }
 
   private function start_timestamp() : int {
-    $date = new DateTimeImmutable("now");
-    return $date->setTime($this->start_time_hour, 0)->getTimestamp();
+    return (new DateTime("now"))->setTime($this->start_time_hour, 0)->getTimestamp();
   }
 
   private function end_timestamp() : int {
-    $date = new DateTimeImmutable("now");
-    return $date->setTime($this->end_time_hour, 0)->getTimestamp();
+    return (new DateTime("now"))->setTime($this->end_time_hour, 0)->getTimestamp();
   }
 
   public function can_run() : bool {
