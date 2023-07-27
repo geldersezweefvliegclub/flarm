@@ -27,7 +27,22 @@ $aprs = new APRS(SERVER, PORT, MYCALL, PASSCODE, FILTER);
 
 $program_timer = new ProgramTimer(PROGRAM_START_TIME_HOUR, PROGRAM_END_TIME_HOUR);
 
+$memory_check_timer = new CountdownTimer(0, 5, 0);
+$starting_memory_usage = memory_get_usage();
+$memory_usage = $starting_memory_usage;
+echo "Starting: " . $memory_usage.PHP_EOL;
+$memory_check_timer->start();
+
 while (1) {
+  if ($memory_check_timer->is_timer_expired()) {
+    $current_memory_usage = memory_get_usage();
+    $memory_difference = $current_memory_usage - $memory_usage;
+    $total_difference = $current_memory_usage - $starting_memory_usage;
+    echo $current_memory_usage." : (".$memory_difference.") ".$total_difference.PHP_EOL;
+    $memory_usage = $current_memory_usage;
+    $memory_check_timer->start();
+  }
+
   if ($program_timer->can_run()) {
     $debug->echo("Can Run");
     if ($db_aircraft_load_timer->is_timer_expired()) {
