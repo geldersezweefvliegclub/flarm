@@ -5,8 +5,8 @@ class CountdownTimer {
 
   private int $starting_timestamp = 0;
 
-  public function __construct(int $hours, int $minutes, int $seconds) {
-    $this->seconds_until_expiration = $seconds + (60 * $minutes) + (3600 * $hours);
+  public function __construct(int $minutes) {
+    $this->seconds_until_expiration = (60 * $minutes);
   }
 
   public function current_timestamp() : int {

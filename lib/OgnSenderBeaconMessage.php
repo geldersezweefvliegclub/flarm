@@ -29,12 +29,15 @@ class OgnSenderBeaconMessage {
   public string $original_message;
   public TimeStamp $time_stamp;
 
+  public string | null $reg_call = null;                      // registration callsing from the helios database
+  public int | null $vliegtuig_id = null;                     // flarmcode from the helios database
+  public int $msg_received;                                   // number of messages received for this beacon
+
   /**
    * @param string $original_message
    */
   public function __construct( string $original_message ) {
     $this->original_message = $original_message;
+    $this->msg_received = date("h") * 3600 + date("i") * 60 + date("s");
   }
-
-
 }

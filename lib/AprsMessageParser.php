@@ -16,6 +16,16 @@ class AprsMessageParser {
 
   public function __construct($line_item) {
     $this->ogn_sender_beacon_message = new OgnSenderBeaconMessage($line_item);
+    $this->ogn_sender_beacon_message->flarm_id = $this->get_flarm_id();
+
+    if ($this->ogn_sender_beacon_message->flarm_id !== false) {
+        try {
+            $this->parse_beacon_message();
+        }
+        catch (Exception $e) {
+            echo "Error parsing beacon message";
+        }
+    }
   }
 
   public function get_flarm_id() : bool|string {
@@ -25,6 +35,10 @@ class AprsMessageParser {
     } else {
       return false;
     }
+  }
+
+  public function get_aircraft_properties() : OgnSenderBeaconMessage | null {
+    return isset($this->ogn_sender_beacon_message) ? $this->ogn_sender_beacon_message : null;
   }
 
   public function parse_beacon_message(): void {
@@ -123,7 +137,51 @@ class AprsMessageParser {
       $position_offset = strlen($this->ogn_sender_beacon_message->latitude) + 1 + strlen($this->ogn_sender_beacon_message->longitude) + 1;
       $msg = substr($msg,$position_offset, strlen($msg) - $position_offset);
     }
+
+    $lat = $this->ogn_sender_beacon_message->latitude;
+    $long = $this->ogn_sender_beacon_message->longitude;
+
+    // latitude and longitude are now parsed, in the APRS1.01 format, convert to degrees
+    $this->ogn_sender_beacon_message->latitude = $this->convertToDecimalDegrees($this->ogn_sender_beacon_message->latitude);
+    $this->ogn_sender_beacon_message->longitude = $this->convertToDecimalDegrees($this->ogn_sender_beacon_message->longitude);
   }
+
+    /*
+  Latitude is expressed as a fixed 8-character field, in degrees and decimal minutes (to two decimal places), followed by the letter N for north or S for south.
+                                                                                                                                                            Latitude degrees are in the range 00 to 90. Latitude minutes are expressed as whole minutes and hundredths of a minute, separated by a decimal point
+  For example: 4903.50N is 49 degrees 3 minutes 30 seconds north.
+  In generic format examples, the latitude is shown as the 8-character string ddmm.hhN (i.e. degrees, minutes and hundredths of a minute north).
+
+  Longitude is expressed as a fixed 9-character field, in degrees and decimal minutes (to two decimal places), followed by the letter E for east or W for west.
+  Longitude degrees are in the range 000 to 180. Longitude minutes are expressed as whole minutes and hundredths of a minute, separated by a decimal point.
+  For example: 07201.75W is 72 degrees 1 minute 45 seconds west.
+  In generic format examples, the longitude is shown as the 9-character string dddmm.hhW (i.e. degrees, minutes and hundredths of a minute west).
+  */
+
+// convert latitude and longitude to decimal degrees
+// see http://www.aprs.org/doc/APRS101.PDF
+    function convertToDecimalDegrees($coordinate)
+    {
+        $parts = explode('.', $coordinate);
+
+        if (count($parts) != 2) {
+            return 0;
+        }
+
+        $degrees = floor($parts[0] / 100);
+        $hunderds = "." . substr($parts[1], 0,  strlen($parts[1]) - 1);
+        $minutes = 1* (($parts[0] % 100) + $hunderds);
+
+        $direction = substr($coordinate, -1);
+
+        $decimalDegrees = $degrees + ($minutes / 60);
+
+        if ($direction == 'S' || $direction == 'W') {
+            $decimalDegrees *= -1;
+        }
+
+        return $decimalDegrees;
+    }
 
   private function parse_time_stamp($msg): void {
     //see http://www.aprs.org/doc/APRS101.PDF page 22
@@ -159,19 +217,20 @@ class AprsMessageParser {
     $heading_speed_altitude = substr($msg, 0, strpos($msg, ' ') + 1);
     $hsa_parts = explode('/', $heading_speed_altitude);
     if (count($hsa_parts) == 3) {
-      $this->ogn_sender_beacon_message->heading = $hsa_parts[0];
-      $this->ogn_sender_beacon_message->ground_speed = $hsa_parts[1];
-      $this->parse_altitude($hsa_parts[2]);
+        $this->ogn_sender_beacon_message->heading = (floor(1* $hsa_parts[0]));
+        $this->ogn_sender_beacon_message->ground_speed = floor(1.852 * $hsa_parts[1]);   // knots to km/h
+        $this->parse_altitude($hsa_parts[2]);
     } else {
-      $this->parse_altitude($hsa_parts[0]);
+        $this->parse_altitude($hsa_parts[0]);
     }
 
     $msg = substr($msg, strlen($heading_speed_altitude), strlen($msg) - strlen($heading_speed_altitude) + 1);
 
   }
 
+  // feet to meters = 0.3048
   private function parse_altitude($raw_altitude) : void {
-    $this->ogn_sender_beacon_message->altitude = substr($raw_altitude, 0, 2);
+    $this->ogn_sender_beacon_message->altitude = floor(0.3048 *preg_replace("/A=/", "", $raw_altitude));
   }
 
   private function parse_id(&$msg) : bool {
