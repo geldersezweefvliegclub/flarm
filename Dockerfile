@@ -1,5 +1,10 @@
 FROM php:8.2-cli
+
+RUN docker-php-ext-install sockets
+
+
 COPY . /usr/src/flarm
+
 WORKDIR /usr/src/flarm
 CMD [ "php", "./run-flarm.php" ]
 
