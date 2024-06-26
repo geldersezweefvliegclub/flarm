@@ -58,10 +58,12 @@ class Curl {
       $this->set_standard_options($curl, $full_url, $headers);
       $response = curl_exec( $curl );
 
-      $info = curl_getinfo($curl);
+      $status_code = curl_getinfo($curl, CURLINFO_HTTP_CODE); //get status code
+      list($header, $body) = self::returnHeaderBody($curl, $response);
+
       curl_close($curl);
     }
-    return json_decode($response);
+    return json_decode($body);
   }
 
     public function exec_post(string $url, array $payload) : mixed {
