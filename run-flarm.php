@@ -95,11 +95,11 @@ while (1) {
                     $debug->echo("REGISTERED " . $flarm_data->reg_call);
                 }
 
-                if (array_key_exists($aircraft_db_id, $db_starts_array)) {
-                    $start = $db_starts_array[$aircraft_db_id];
-                    if ($flarm_data->ground_speed < 50 && $previous_updates[$flarm_id]->ground_speed > 50)     // 50 k/m is the minimum speed for a valid flight
+                if ($flarm_data->ground_speed < 50 && $previous_updates[$flarm_id]->ground_speed > 50)     // 50 k/m is the minimum speed for a valid flight
+                    if (array_key_exists($aircraft_db_id, $db_starts_array)) {
                     {
-                        $debug->echo("------- LANDING:" . $flarm_data->reg_call);
+                        $start = $db_starts_array[$aircraft_db_id];
+                        $debug->echo("------- LANDING:" . $flarm_data->reg_call . " " . $start->id);
                         register_landing($start->id);
                     }
                 }
@@ -187,6 +187,12 @@ function register_landing(string $start_id) : mixed {
     $debug->echo("ID:". $start_id);
 
     $curl = new Curl();
-    return $curl->exec_put(START_LANDINGSTIJD, ["ID" => $start_id, "EXTERNAL_ID" => date("H:i")]);
+    $start = $curl->exec_get(START_OPHALEN, ["ID" => $start_id]);
+
+    // niet nog een keer registreren
+    if (!isset($start->EXTERNAL_ID)) {
+        return $curl->exec_put(START_OPSLAAN, ["ID" => $start_id, "EXTERNAL_ID" => date("H:i")]);
+    }
+    return null;
 }
 

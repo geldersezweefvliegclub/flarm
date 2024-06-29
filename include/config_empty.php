@@ -10,7 +10,8 @@ const LOGIN_URL = '/Login/Login?token=$BYPASS_TOKEN';
 const VLIEGTUIGEN_GET_ALL_OBJECTS_URL = '/Vliegtuigen/GetObjects?VELDEN=ID,FLARMCODE,REG_CALL';
 const VLIEGTUIGEN_AANMELDEN = '/AanwezigVliegtuigen/Aanmelden';
 
-const START_LANDINGSTIJD = '/Startlijst/SaveObject';
+const START_OPSLAAN = '/Startlijst/SaveObject';
+const START_OPHALEN = '/Startlijst/GetObject';
 
 const STARTS_GET_ALL_OPEN_URL = '/Startlijst/GetObjects?OPEN_STARTS=true';
 //for connecting to OGN APRS
