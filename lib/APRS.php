@@ -64,7 +64,6 @@ class APRS {
 
   private function check_for_socket_read_data(): bool {
     $read[] = $this->socket;
-    $this->debug->echo("before select");
 
     $w = null;
     $e = null;

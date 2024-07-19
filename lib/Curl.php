@@ -20,6 +20,9 @@ class Curl {
 
     $response = curl_exec($curl);
 
+    $status_code = curl_getinfo($curl, CURLINFO_HTTP_CODE); //get status code
+    list($header, $body) = self::returnHeaderBody($curl, $response);
+
     if ($response !== false) {
       $obj = json_decode($response);
       if ($obj) {
@@ -62,8 +65,9 @@ class Curl {
       list($header, $body) = self::returnHeaderBody($curl, $response);
 
       curl_close($curl);
+      return json_decode($body);
     }
-    return json_decode($body);
+    return false;
   }
 
     public function exec_post(string $url, array $payload) : mixed {

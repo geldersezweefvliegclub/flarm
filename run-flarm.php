@@ -30,6 +30,8 @@ $check_delayed_landings_timer = new CountdownTimer(DELAYED_LANDING_MINUTES);
 $db_aircraft_array = load_aircraft();
 $db_aircraft_load_timer->start();
 
+$airport = load_airports();
+
 $db_starts_array = load_starts();
 $db_starts_load_timer->start();
 
@@ -44,8 +46,6 @@ $program_timer = new ProgramTimer(PROGRAM_START_TIME_HOUR, PROGRAM_END_TIME_HOUR
 
 while (1) {
     if ($program_timer->can_run()) {
-        $debug->echo("Daylight");
-
         if ($db_aircraft_load_timer->is_timer_expired()) {
             $db_aircraft_array = load_aircraft();
             $db_aircraft_load_timer->start();
@@ -70,6 +70,8 @@ while (1) {
         $data_array = $aprs->run();
         foreach($data_array as $data) {
 
+            $start = null;
+
             // sentence must contain a '>' character
             if ((strpos($data, '>') === false) || strpos($data, "\r") === false) {
                 continue;
@@ -85,29 +87,44 @@ while (1) {
             $flarm_id = strtolower($flarm_data->flarm_id);
 
             if (isset($db_aircraft_array[$flarm_id])) {
-
                 $aircraft_db_id = $db_aircraft_array[$flarm_id]->id;
                 $flarm_data->reg_call = $db_aircraft_array[$flarm_id]->reg_call;
                 $flarm_data->vliegtuig_id = $aircraft_db_id;
+
+                if (array_key_exists($aircraft_db_id, $db_starts_array))
+                {
+                    $start = $db_starts_array[$aircraft_db_id];
+                }
 
                 if (!array_key_exists($flarm_id, $previous_updates)) {
                     $result = register_aircraft($aircraft_db_id);
                     $debug->echo("REGISTERED " . $flarm_data->reg_call);
                 }
 
-                if ($flarm_data->ground_speed < 50 && $previous_updates[$flarm_id]->ground_speed > 50)     // 50 k/m is the minimum speed for a valid flight
-                    if (array_key_exists($aircraft_db_id, $db_starts_array)) {
+                if (array_key_exists($flarm_id, $previous_updates) &&
+                    isset($flarm_data->ground_speed) &&
+                    isset($previous_updates[$flarm_id]->ground_speed) &&
+                    $flarm_data->ground_speed < 50 &&
+                    $previous_updates[$flarm_id]->ground_speed > 50)     // 50 k/m is the minimum speed for a valid flight
+                {
+                    if (array_key_exists($aircraft_db_id, $db_starts_array))
                     {
                         $start = $db_starts_array[$aircraft_db_id];
                         $debug->echo("------- LANDING:" . $flarm_data->reg_call . " " . $start->id);
                         register_landing($start->id);
+                    }
+                    else
+                    {
+                        $debug->echo("------- landing:" . $flarm_data->reg_call . " NO START");
+
                     }
                 }
                 $previous_updates[$flarm_id] = $flarm_data;
             }
 
             $str = isset($flarm_data->reg_call) ? $flarm_data->reg_call : $flarm_data->flarm_id;
-            $debug->echo("RECEIVED:". $str . " GS:" . $flarm_data->ground_speed . " ALT:" . $flarm_data->altitude);
+            $txt = isset($start->id) ? $start->id : "-";
+            $debug->echo("Ontvangen:". $str . " start ID:" . $txt . " GS:" . $flarm_data->ground_speed . " ALT:" . $flarm_data->altitude);
         }
     } else {
         $debug->echo("Dark");
@@ -133,6 +150,11 @@ function load_aircraft() : array {
 }
 
 function load_starts() : array {
+    global $db_aircraft_array;
+
+    $debug = new Debug();
+    $debug->echo("load_starts() " .  date("H:i:s"));
+
     $starts = array();
     $curl = new Curl();
     $json_data = $curl->exec_get(STARTS_GET_ALL_OPEN_URL);
@@ -147,11 +169,19 @@ function load_starts() : array {
 
             if (array_key_exists($database_start->vliegtuig_id, $starts)) {     // previous flight is not landed
                 $tijd1 = 60*explode($starts[$database_start->vliegtuig_id]->starttijd, ":")[0] + explode($starts[$database_start->vliegtuig_id]->starttijd, ":")[1];
-                $tijd2 = 60*explode($$database_start->starttijd, ":")[0] + explode($database_start->starttijd, ":")[1];
+                $tijd2 = 60*explode($database_start->starttijd, ":")[0] + explode($database_start->starttijd, ":")[1];
 
                 if ($tijd1 < $tijd2)   // use latest start
                     continue;
             }
+
+            $t = $array = array_values($db_aircraft_array);
+            $idx = array_search($database_start->vliegtuig_id, array_column($t, 'id'));
+
+            $kist = ($idx === false) ? null : $t[$idx];
+
+            $reg_call = isset($kist) ? $kist->reg_call : $database_start->vliegtuig_id;
+            $debug->echo("Start:" . $reg_call . " " . $database_start->starttijd);
             $starts[$database_start->vliegtuig_id] = $database_start;
         }
     }
@@ -159,9 +189,28 @@ function load_starts() : array {
     return $starts;
 }
 
-function register_aircraft(string $aircraft_id) : mixed {
+function load_airports() : mixed {
+
     $curl = new Curl();
-    return $curl->exec_post(VLIEGTUIGEN_AANMELDEN, ["VLIEGTUIG_ID" => $aircraft_id ]);
+    $json_data = $curl->exec_get(AIRPORTS_URL);
+    if ($json_data) {
+        foreach($json_data->dataset as $airport) {
+            if ($airport->CODE == VLIEGVELD_CODE) {
+                return $airport;
+            }
+        }
+    }
+    return null;
+}
+
+function register_aircraft(string $aircraft_id) : mixed {
+    $args = array("ID" => $aircraft_id);
+    if (isset($airport)) {
+        $args["VLIEGVELD_ID"] = $airport->id;
+    }
+
+    $curl = new Curl();
+    return $curl->exec_post(VLIEGTUIGEN_AANMELDEN, $args);
 }
 
 function check_delayed_landings($last_updates, $db_starts_array) {
@@ -171,7 +220,7 @@ function check_delayed_landings($last_updates, $db_starts_array) {
     $now = date("h") * 3600 + date("i") * 60 + date("s");
 
     foreach ($last_updates as $flarm_data) {
-        if (($flarm_data->altitude < 250) && ($flarm_data->ground_speed > 50) && (($now - $flarm_data->msg_received) > 45)) {
+        if (($flarm_data->altitude < (VLIEGVELD_HOOGTE + 250)) && ($flarm_data->ground_speed > 50) && (($now - $flarm_data->msg_received) > 45)) {
             $aircraft_db_id = $flarm_data->vliegtuig_id;
             if (array_key_exists($aircraft_db_id, $db_starts_array)) {
                 $start = $db_starts_array[$aircraft_db_id];
