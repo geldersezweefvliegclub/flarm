@@ -105,7 +105,7 @@ while (1) {
                     isset($flarm_data->ground_speed) &&
                     isset($previous_updates[$flarm_id]->ground_speed) &&
                     $flarm_data->ground_speed < 50 &&
-                    $previous_updates[$flarm_id]->ground_speed > 50)     // 50 k/m is the minimum speed for a valid flight
+                    $previous_updates[$flarm_id]->ground_speed >= 50)     // 50 k/m is the minimum speed for a valid flight
                 {
                     if (array_key_exists($aircraft_db_id, $db_starts_array))
                     {
