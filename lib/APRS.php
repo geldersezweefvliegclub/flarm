@@ -31,7 +31,7 @@ class APRS {
     $this->call_sign = $call_sign;
     $this->passcode = $passcode;
     $this->version = "1.0";
-    $this->filter = $filter;
+    $this->filter = ' filter ' . $filter;
 
     $this->connected = false;
     $this->socket_error = false;
@@ -189,9 +189,6 @@ class APRS {
     }
 
     $this->connected = true;
-    if (!empty($this->filter)) {
-      $this->filter = ' filter ' . $this->filter;
-    }
     $this->send("user ".$this->call_sign." pass ".$this->passcode." vers gezc\\phpaprs ".$this->version . $this->filter."\n");
 
     return true;
