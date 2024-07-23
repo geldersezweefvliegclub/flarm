@@ -102,10 +102,11 @@ while (1) {
                 }
 
                 if (array_key_exists($flarm_id, $previous_updates) &&
-                    isset($flarm_data->ground_speed) &&
+                    isset($flarm_data->ground_speed) && isset($flarm_data->altitude) &&
+                    $flarm_data->altitude < (VLIEGVELD_HOOGTE + 250) &&
                     isset($previous_updates[$flarm_id]->ground_speed) &&
-                    $flarm_data->ground_speed < 50 &&
-                    $previous_updates[$flarm_id]->ground_speed >= 50)     // 50 k/m is the minimum speed for a valid flight
+                    $flarm_data->ground_speed < 40 &&
+                    $previous_updates[$flarm_id]->ground_speed >= 20)     // 20 k/m is the minimum speed for a valid flight
                 {
                     if (array_key_exists($aircraft_db_id, $db_starts_array))
                     {
@@ -153,7 +154,7 @@ function load_starts() : array {
     global $db_aircraft_array;
 
     $debug = new Debug();
-    $debug->echo("load_starts() " .  date("H:i:s"));
+    $debug->echo("load_starts()");
 
     $starts = array();
     $curl = new Curl();
@@ -163,26 +164,45 @@ function load_starts() : array {
         foreach($json_data->dataset as $jsonstarts) {
             $database_start = DatabaseStart::fromObject( $jsonstarts );
 
-            if (!isset($database_start->starttijd)) {   // not yet started
-                continue;
-            }
-
-            if (array_key_exists($database_start->vliegtuig_id, $starts)) {     // previous flight is not landed
-                $tijd1 = 60*explode($starts[$database_start->vliegtuig_id]->starttijd, ":")[0] + explode($starts[$database_start->vliegtuig_id]->starttijd, ":")[1];
-                $tijd2 = 60*explode($database_start->starttijd, ":")[0] + explode($database_start->starttijd, ":")[1];
-
-                if ($tijd1 < $tijd2)   // use latest start
-                    continue;
-            }
-
             $t = $array = array_values($db_aircraft_array);
             $idx = array_search($database_start->vliegtuig_id, array_column($t, 'id'));
 
             $kist = ($idx === false) ? null : $t[$idx];
-
             $reg_call = isset($kist) ? $kist->reg_call : $database_start->vliegtuig_id;
-            $debug->echo("Start:" . $reg_call . " " . $database_start->starttijd);
+
+            if (!isset($database_start->starttijd)) {   // not yet started
+                $debug->echo( $reg_call . " nog niet gestart continue" . $database_start->starttijd);
+                continue;
+            }
+
+            if (array_key_exists($database_start->vliegtuig_id, $starts)) {     // previous flight is not landed
+                $debug->echo("Er is al een start voor" .$reg_call . " " . $starts[$database_start->vliegtuig_id]->starttijd . " " . $database_start->starttijd);
+
+                $tijd1 = 60*explode($starts[$database_start->vliegtuig_id]->starttijd, ":")[0] + explode($starts[$database_start->vliegtuig_id]->starttijd, ":")[1];
+                $tijd2 = 60*explode($database_start->starttijd, ":")[0] + explode($database_start->starttijd, ":")[1];
+
+                if ($tijd1 < $tijd2)   // use latest start
+                {
+                    $debug->echo($database_start->id . " Continue");
+                    continue;
+                }
+                else
+                {
+                    $debug->echo($starts[$database_start->vliegtuig_id]->id . " Wordt overschreven");
+                }
+            }
             $starts[$database_start->vliegtuig_id] = $database_start;
+        }
+
+        foreach($starts as $s)
+        {
+            $t = $array = array_values($db_aircraft_array);
+            $idx = array_search($s->vliegtuig_id, array_column($t, 'id'));
+
+            $kist = ($idx === false) ? null : $t[$idx];
+            $reg_call = isset($kist) ? $kist->reg_call : $database_start->vliegtuig_id;
+
+            $debug->echo("** " . $reg_call . " " . $s->starttijd . " **");
         }
     }
 
