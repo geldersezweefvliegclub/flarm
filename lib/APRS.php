@@ -40,7 +40,6 @@ class APRS {
     $this->conn_delay = 5;
 
     $this->debug = new Debug();
-
   }
 
   /**

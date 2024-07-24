@@ -39,5 +39,16 @@ class OgnSenderBeaconMessage {
   public function __construct( string $original_message ) {
     $this->original_message = $original_message;
     $this->msg_received = date("h") * 3600 + date("i") * 60 + date("s");
+
+    $this->reg_call = null;
+    $this->vliegtuig_id = null;
+    $this->ground_speed = -1;
+    $this->heading = -1;
+    $this->vertical_speed_fpm = -1;
+    $this->turn_rate = -1;
+    $this->flight_level = -1;
+    $this->latitude = -1;
+    $this->longitude = -1;
+    $this->altitude =-1;
   }
 }
