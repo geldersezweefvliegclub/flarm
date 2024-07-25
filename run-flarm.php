@@ -204,10 +204,10 @@ function load_starts() : array {
             }
 
             if (array_key_exists($database_start->vliegtuig_id, $starts)) {     // previous flight is not landed
-                $debug->echo("Er is al een start voor" .$reg_call . " " . $starts[$database_start->vliegtuig_id]->starttijd . " " . $database_start->starttijd);
+                $debug->echo("Er is al een start voor " .$reg_call . " " . $starts[$database_start->vliegtuig_id]->starttijd . " " . $database_start->starttijd);
 
-                $tijd1 = 60*explode($starts[$database_start->vliegtuig_id]->starttijd, ":")[0] + explode($starts[$database_start->vliegtuig_id]->starttijd, ":")[1];
-                $tijd2 = 60*explode($database_start->starttijd, ":")[0] + explode($database_start->starttijd, ":")[1];
+                $tijd1 = 60*explode($starts[$database_start->vliegtuig_id]->starttijd, ":")[0] + 1*explode($starts[$database_start->vliegtuig_id]->starttijd, ":")[1];
+                $tijd2 = 60*explode($database_start->starttijd, ":")[0] + 1*explode($database_start->starttijd, ":")[1];
 
                 if ($tijd1 < $tijd2)   // use latest start
                 {
