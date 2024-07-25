@@ -29,6 +29,9 @@ class OgnSenderBeaconMessage {
   public string $original_message;
   public TimeStamp $time_stamp;
 
+  public int $kalman_speed;
+  public int $kalman_altitude;
+
   public string | null $reg_call = null;                      // registration callsing from the helios database
   public int | null $vliegtuig_id = null;                     // flarmcode from the helios database
   public int $msg_received;                                   // number of messages received for this beacon

@@ -83,11 +83,13 @@ class APRS {
 
   private function read_socket_data(): bool|array {
     $res = socket_recv($this->socket,$buffer,8096,0);
-    if( $res === false ) {
+    if( $res === false )
+    {
       $this->set_socket_error("Receive error: ");
       return false;
     }
-    elseif($res===0){
+    elseif ($res === 0)
+    {
       $this->disconnect();
       $this->debug->echo( "Read 0 after select");
       return true;
@@ -105,7 +107,8 @@ class APRS {
 
   }
 
-  private function keep_alive(): void {
+  private function keep_alive(): void
+  {
     if ($this->last_connection_attempt) {
       $elapsed_time = time() - $this->last_connection_attempt;
       if ($elapsed_time >= 180) {
@@ -128,32 +131,41 @@ class APRS {
   }
 
   private function io_loop(): bool|array {
-    if(!$this->connected) {
+    if ($this->connected === false)
+    {
       $this->debug->echo("Connection closed, trying to re-connect...");
-      if(!$this->connect()) {
+      if(!$this->connect())
+      {
         $this->debug->echo("Re-connection attempt failed");
         return false;
       };
       $this->debug->echo("Reconnected!");
     }
 
-    if ($this->check_for_socket_read_data()){
+    if ($this->check_for_socket_read_data())
+    {
       $data = $this->read_socket_data();
-      if (!$data) {
-        if ($this->socket_error) {
+      if ($data === false)
+      {
+        if ($this->socket_error)
+        {
           $this->disconnect();
           return false;
-        } else {
-          return $data;
         }
-      } else return $data;
-    } else {
-      if ($this->socket_error) {
-        $this->disconnect();
+        else
+          return $data;
+
       }
+      else
+          return $data;
+    }
+    else
+    {
+      if ($this->socket_error)
+        $this->disconnect();
+
       return false;
     }
-
   }
 
   public function connect(): bool {

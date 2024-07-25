@@ -18,6 +18,7 @@ include_once 'lib/Curl.php';
 include_once 'lib/Debug.php';
 include_once 'lib/ProgramTimer.php';
 include_once 'lib/CountdownTimer.php';
+include_once 'lib/Kalman.php';
 
 date_default_timezone_set('Europe/Amsterdam');
 
@@ -36,13 +37,16 @@ $db_starts_array = load_starts();
 $db_starts_load_timer->start();
 
 $check_delayed_landings_timer->start();
-$previous_updates = array();              // array to store the last time we updated the aircraft in the helios database
+$previous_updates = array();            // array to store the last time we updated the aircraft in the helios database
+$kalman_speed_array = array();          // array to store the kalman filter for the speed
+$kalman_altitude_array = array();       // array to store the kalman filter for the altitude
 
 //connect to APRS
 $aprs = new APRS(SERVER, PORT, MYCALL, PASSCODE, FILTER);
-
-
 $program_timer = new ProgramTimer(PROGRAM_START_TIME_HOUR, PROGRAM_END_TIME_HOUR);
+$last_data_record = null;
+
+
 
 while (1) {
     if ($program_timer->can_run()) {
@@ -63,14 +67,15 @@ while (1) {
 
         if (!$aprs->is_connected()) {
             $aprs->connect();
-            $last_helios_update = array();
         }
 
         // handle any received APRS messages
         $data_array = $aprs->run();
-        foreach($data_array as $data) {
 
+        for ($i = 0; $i < count($data_array); $i++)
+        {
             $start = null;
+            $data = isset($last_data_record) && ($i == 0) ? $last_data_record . $data_array[$i] : $data_array[$i];
 
             // sentence must contain a '>' character
             if ((strpos($data, '>') === false) || strpos($data, "\r") === false) {
@@ -85,6 +90,18 @@ while (1) {
             }
 
             $flarm_id = strtolower($flarm_data->flarm_id);
+
+            if (!array_key_exists($flarm_id, $kalman_speed_array)) {
+                $kalman_speed_array[$flarm_id]= new KalmanFilter();
+            }
+            $kalman_speed = $kalman_speed_array[$flarm_id];
+            $flarm_data->kalman_speed = $kalman_speed->filter($flarm_data->ground_speed);
+
+            if (!array_key_exists($flarm_id, $kalman_altitude_array)) {
+                $kalman_altitude_array[$flarm_id] = new KalmanFilter();
+            }
+            $kalman_altitude = $kalman_altitude_array[$flarm_id];
+            $flarm_data->kalman_altitude = $kalman_altitude->filter($flarm_data->altitude);
 
             if (isset($db_aircraft_array[$flarm_id])) {
                 $aircraft_db_id = $db_aircraft_array[$flarm_id]->id;
@@ -102,11 +119,11 @@ while (1) {
                 }
 
                 if (array_key_exists($flarm_id, $previous_updates) &&
-                    isset($flarm_data->ground_speed) && isset($flarm_data->altitude) &&
-                    $flarm_data->altitude < (VLIEGVELD_HOOGTE + 250) &&
+                    isset($flarm_data->kalman_speed) && isset($flarm_data->kalman_altitude) &&
+                    $flarm_data->kalman_altitude < (VLIEGVELD_HOOGTE + 250) &&
                     isset($previous_updates[$flarm_id]->ground_speed) &&
-                    $flarm_data->ground_speed < 40 &&
-                    $previous_updates[$flarm_id]->ground_speed >= 20)     // 20 k/m is the minimum speed for a valid flight
+                    $flarm_data->kalman_speed < 30 &&
+                    $previous_updates[$flarm_id]->kalman_speed >= 30)     // 30 k/m is the minimum speed for a valid flight
                 {
                     if (array_key_exists($aircraft_db_id, $db_starts_array))
                     {
@@ -125,14 +142,25 @@ while (1) {
 
             $str = isset($flarm_data->reg_call) ? $flarm_data->reg_call : $flarm_data->flarm_id;
             $txt = isset($start->id) ? $start->id : "-";
-            $debug->echo("Ontvangen:". $str . " start ID:" . $txt . " GS:" . $flarm_data->ground_speed . " ALT:" . $flarm_data->altitude);
+            $msg = sprintf("Ontvangen: %s start ID: %s  GS:%s|%s ALT:%s|%s", $str,  $txt, $flarm_data->ground_speed, $flarm_data->kalman_speed, $flarm_data->altitude, $flarm_data->kalman_altitude);
+            $debug->echo($msg);
         }
     } else {
         $debug->echo("Dark");
         if ($aprs->is_connected()) {
             $aprs->disconnect();
         }
+
+        if (count($previous_updates) > 0)
+            $previous_updates = array();
+
+        if (count($kalman_speed_array) > 0)
+            $kalman_speed_array = array();
+
+        if (count($kalman_altitude_array) > 0)
+            $kalman_altitude_array = array();
     }
+    $last_data_record = count($data_array) > 0 ? $data_array[count($data_array) - 1] : null;
     sleep(1);    // sleep for a second to prevent cpu spinning
 }
 
