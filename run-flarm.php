@@ -204,7 +204,7 @@ function load_starts() : array {
             }
 
             if (array_key_exists($database_start->vliegtuig_id, $starts)) {     // previous flight is not landed
-verg                $debug->echo("Er is al een start voor " .$reg_call . " " . $starts[$database_start->vliegtuig_id]->starttijd . " " . $database_start->starttijd);
+                $debug->echo("Er is al een start voor " .$reg_call . " " . $starts[$database_start->vliegtuig_id]->starttijd . " " . $database_start->starttijd);
 
                 // maak van tijd een numerieke waarde om te kunnen vergelijken
                 $tijd1 = str_replace(":", "0", $starts[$database_start->vliegtuig_id]->starttijd) * 1;
