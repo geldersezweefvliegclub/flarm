@@ -82,7 +82,22 @@ while (1) {
                 continue;
             }
 
-            $aprs_message_parser = new AprsMessageParser($data);
+            try
+            {
+                $aprs_message_parser = new AprsMessageParser($data);
+            }
+            catch (Exception $e)
+            {
+                $debug->echo("Error: " . $e->getMessage() . " " . $data);
+
+                if ($i != 0)
+                    $debug->echo("previous in data_array: " . $data_array[$i - 1]);
+
+                if ($i != count($data_array) - 2)
+                    $debug->echo("next in data_array: " . $data_array[$i+1]);
+
+                continue;
+            }
 
             $flarm_data = $aprs_message_parser->get_aircraft_properties();
             if ($flarm_data == null || $flarm_data->flarm_id === false) {
@@ -145,7 +160,9 @@ while (1) {
             $msg = sprintf("Ontvangen: %s start ID: %s  GS:%s|%s ALT:%s|%s", $str,  $txt, $flarm_data->ground_speed, $flarm_data->kalman_speed, $flarm_data->altitude, $flarm_data->kalman_altitude);
             $debug->echo($msg);
         }
-    } else {
+    }
+    else
+    {
         $debug->echo("Dark");
         if ($aprs->is_connected()) {
             $aprs->disconnect();
