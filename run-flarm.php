@@ -145,6 +145,7 @@ while (1) {
                     }
                 }
             }
+            $previous_updates[$flarm_id] = $flarm_data;
 
             $str = isset($flarm_data->reg_call) ? $flarm_data->reg_call : $flarm_data->flarm_id;
             $txt = isset($start->id) ? $start->id : "-";
