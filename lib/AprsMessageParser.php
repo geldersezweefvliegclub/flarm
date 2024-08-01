@@ -10,6 +10,7 @@ http://wiki.glidernet.org/wiki:ogn-flavoured-aprs
 include_once 'OgnSenderBeaconMessage.php';
 include_once 'TimeStamp.php';
 include_once 'enum/AprsAircraftType.php';
+include_once 'enum/AircraftStatus.php';
 
 class AprsMessageParser {
   public OgnSenderBeaconMessage $ogn_sender_beacon_message;

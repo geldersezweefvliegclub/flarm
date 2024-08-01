@@ -9,16 +9,21 @@ if (!file_exists("include/config.php"))
     die;
 }
 
+
+
 include 'lib/APRS.php';
 include 'lib/AprsMessageParser.php';
 include 'lib/DatabaseAircraft.php';
 include 'lib/DatabaseStart.php';
+
 include_once 'include/config.php';
 include_once 'lib/Curl.php';
 include_once 'lib/Debug.php';
 include_once 'lib/ProgramTimer.php';
 include_once 'lib/CountdownTimer.php';
 include_once 'lib/Kalman.php';
+
+include_once 'enum/AircraftStatus.php';
 
 date_default_timezone_set('Europe/Amsterdam');
 
@@ -110,7 +115,8 @@ while (1) {
             $kalman_altitude = $kalman_altitude_array[$flarm_id];
             $flarm_data->kalman_altitude = $kalman_altitude->filter($flarm_data->altitude);
 
-            if (isset($db_aircraft_array[$flarm_id])) {
+            if (isset($db_aircraft_array[$flarm_id]))
+            {
                 $aircraft_db_id = $db_aircraft_array[$flarm_id]->id;
                 $flarm_data->reg_call = $db_aircraft_array[$flarm_id]->reg_call;
                 $flarm_data->vliegtuig_id = $aircraft_db_id;
@@ -125,23 +131,26 @@ while (1) {
                     $debug->echo(sprintf("REGISTERED %s", $flarm_data->reg_call));
                 }
 
-                if (array_key_exists($flarm_id, $previous_updates) &&
-                    isset($flarm_data->kalman_speed) && isset($flarm_data->kalman_altitude) &&
-                    $flarm_data->kalman_altitude < (VLIEGVELD_HOOGTE + 250) &&
-                    isset($previous_updates[$flarm_id]->ground_speed) &&
-                    $flarm_data->kalman_speed < 30 &&
-                    $previous_updates[$flarm_id]->kalman_speed >= 30)     // 30 k/m is the minimum speed for a valid flight
-                {
-                    if (array_key_exists($aircraft_db_id, $db_starts_array))
-                    {
-                        $start = $db_starts_array[$aircraft_db_id];
-                        $debug->echo(sprintf("------- LANDING: %s %s", $flarm_data->reg_call, $start->id));
-                        register_landing($start->id);
+                if (isset($flarm_data->kalman_speed) && isset($flarm_data->kalman_altitude)) {
+                    // 30 k/m is the minimum sneldheid om te vliegen
+                    if (array_key_exists($flarm_id, $previous_updates) &&
+                        $flarm_data->kalman_altitude < (VLIEGVELD_HOOGTE + 250) &&
+                        isset($previous_updates[$flarm_id]->kalman_speed) &&
+                        $previous_updates[$flarm_id]->kalman_speed >= 30 &&
+                        $flarm_data->kalman_speed < 30 &&
+                        $previous_updates[$flarm_id]->status == AircraftStatus::Flying) {
+                        if (array_key_exists($aircraft_db_id, $db_starts_array)) {
+                            $start = $db_starts_array[$aircraft_db_id];
+                            $debug->echo(sprintf("------- LANDING: %s %s", $flarm_data->reg_call, $start->id));
+                            register_landing($start->id);
+                        } else {
+                            $debug->echo(sprintf("------- landing: %s NO START", $flarm_data->reg_call));
+                        }
+                        $flarm_data->status = AircraftStatus::On_Ground;
                     }
-                    else
-                    {
-                        $debug->echo(sprintf("------- landing: %s NO START", $flarm_data->reg_call));
 
+                    if (($flarm_data->kalman_speed > 30) && ($flarm_data->kalman_altitude > (VLIEGVELD_HOOGTE + 50))) {
+                        $flarm_data->status = AircraftStatus::Flying;
                     }
                 }
             }
@@ -149,7 +158,7 @@ while (1) {
 
             $str = isset($flarm_data->reg_call) ? $flarm_data->reg_call : $flarm_data->flarm_id;
             $txt = isset($start->id) ? $start->id : "-";
-            $msg = sprintf("Ontvangen: %s start ID: %s  GS:%s|%s ALT:%s|%s", $str,  $txt, $flarm_data->ground_speed, $flarm_data->kalman_speed, $flarm_data->altitude, $flarm_data->kalman_altitude);
+            $msg = sprintf("Ontvangen: %s start ID: %s  GS:%s|%s ALT:%s|%s  %s", $str,  $txt, $flarm_data->ground_speed, $flarm_data->kalman_speed, $flarm_data->altitude, $flarm_data->kalman_altitude, $flarm_data->status);
             $debug->echo($msg);
         }
         $last_data_record = count($data_array) > 0 ? $data_array[count($data_array) - 1] : null;
