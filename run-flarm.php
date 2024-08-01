@@ -146,11 +146,11 @@ while (1) {
                         } else {
                             $debug->echo(sprintf("------- landing: %s NO START", $flarm_data->reg_call));
                         }
-                        $flarm_data->status = AircraftStatus::On_Ground;
+                        $flarm_data->status = GliderStatus::On_Ground;
                     }
 
                     if (($flarm_data->kalman_speed > 30) && ($flarm_data->kalman_altitude > (VLIEGVELD_HOOGTE + 50))) {
-                        $flarm_data->status = AircraftStatus::Flying;
+                        $flarm_data->status = GliderStatus::Flying;
                     }
                 }
             }

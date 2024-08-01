@@ -1,6 +1,7 @@
 <?php
 include_once 'TimeStamp.php';
 include_once 'enum/AprsAircraftType.php';
+include_once 'enum/AircraftStatus.php';
 
 class OgnSenderBeaconMessage {
   public string $flarm_id;
@@ -32,6 +33,8 @@ class OgnSenderBeaconMessage {
   public int $kalman_speed;
   public int $kalman_altitude;
 
+  public GliderStatus $status;
+
   public string | null $reg_call = null;                      // registration callsing from the helios database
   public int | null $vliegtuig_id = null;                     // flarmcode from the helios database
   public int $msg_received;                                   // number of messages received for this beacon
@@ -41,7 +44,7 @@ class OgnSenderBeaconMessage {
    */
   public function __construct( string $original_message ) {
     $this->original_message = $original_message;
-    $this->msg_received = date("h") * 3600 + date("i") * 60 + date("s");
+    $this->msg_received = date("H") * 3600 + date("i") * 60 + date("s");
 
     $this->reg_call = null;
     $this->vliegtuig_id = null;
@@ -53,5 +56,6 @@ class OgnSenderBeaconMessage {
     $this->latitude = -1;
     $this->longitude = -1;
     $this->altitude =-1;
+    $this->status = GliderStatus::Unknown;
   }
 }
