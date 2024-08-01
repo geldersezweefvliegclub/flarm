@@ -225,7 +225,7 @@ function load_starts() : array {
             }
 
             if (isset($json_start->landingstijd)) {   // already landed
-                $now = date("h") * 60 + date("i");
+                $now = date("H") * 60 + date("i");
                 $landingstijd = (explode(":", $json_start->landingstijd)[0])*60 + (explode(":", $json_start->landingstijd)[1])*1;
 
                 if ($now - $landingstijd > 15) {
@@ -296,7 +296,7 @@ function check_delayed_landings($last_updates, $db_starts_array) {
     if ($db_starts_array == null || count($db_starts_array) == 0) {
         return;
     }
-    $now = date("h") * 3600 + date("i") * 60 + date("s");
+    $now = date("H") * 3600 + date("i") * 60 + date("s");
 
     foreach ($last_updates as $flarm_data) {
         if (($flarm_data->altitude < (VLIEGVELD_HOOGTE + 250)) && ($flarm_data->ground_speed > 50) && (($now - $flarm_data->msg_received) > 45)) {
