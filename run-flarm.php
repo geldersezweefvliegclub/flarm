@@ -88,14 +88,6 @@ while (1) {
             }
             catch (Exception $e)
             {
-                $debug->echo("Error: " . $e->getMessage() . " " . $data);
-
-                if ($i != 0)
-                    $debug->echo("previous in data_array: " . $data_array[$i - 1]);
-
-                if ($i != count($data_array) - 2)
-                    $debug->echo("next in data_array: " . $data_array[$i+1]);
-
                 continue;
             }
 
@@ -152,7 +144,6 @@ while (1) {
 
                     }
                 }
-                $previous_updates[$flarm_id] = $flarm_data;
             }
 
             $str = isset($flarm_data->reg_call) ? $flarm_data->reg_call : $flarm_data->flarm_id;
@@ -160,6 +151,8 @@ while (1) {
             $msg = sprintf("Ontvangen: %s start ID: %s  GS:%s|%s ALT:%s|%s", $str,  $txt, $flarm_data->ground_speed, $flarm_data->kalman_speed, $flarm_data->altitude, $flarm_data->kalman_altitude);
             $debug->echo($msg);
         }
+        $last_data_record = count($data_array) > 0 ? $data_array[count($data_array) - 1] : null;
+        sleep(1);    // sleep for a second to prevent cpu spinning
     }
     else
     {
@@ -176,9 +169,10 @@ while (1) {
 
         if (count($kalman_altitude_array) > 0)
             $kalman_altitude_array = array();
+
+        sleep(600);    // sleep for 10 minutes
     }
-    $last_data_record = count($data_array) > 0 ? $data_array[count($data_array) - 1] : null;
-    sleep(1);    // sleep for a second to prevent cpu spinning
+
 }
 
 function load_aircraft() : array {
@@ -197,6 +191,7 @@ function load_aircraft() : array {
 
 function load_starts() : array {
     global $db_aircraft_array;
+    global $airport;
 
     $debug = new Debug();
     $debug->echo("load_starts()");
@@ -215,9 +210,26 @@ function load_starts() : array {
             $kist = ($idx === false) ? null : $t[$idx];
             $reg_call = isset($kist) ? $kist->reg_call : $database_start->vliegtuig_id;
 
+            // Is deze start op het veld waarvoor we de data willen hebben?
+            if (isset($database_start->veld_id) && isset($airport)) {
+                if ($airport->ID != $database_start->veld_id) {
+                    $debug->echo($database_start->id . "/" .$database_start->reg_call . " Continue veld_id " . $database_start->veld_id . "/" . $airport->ID);
+                    continue;
+                }
+            }
+
             if (!isset($database_start->starttijd)) {   // not yet started
                 $debug->echo( $reg_call . " nog niet gestart continue" . $database_start->starttijd);
                 continue;
+            }
+
+            if (isset($database_start->landingsdatum)) {   // already landed
+                $now = date("h") * 60 + date("i");
+                $landingstijd = (explode(":", $database_start->landingsdatum)[0])*60 + (explode(":", $database_start->landingsdatum)[1])*1;
+
+                if ($now - $landingstijd > 15) {
+                    continue;
+                }
             }
 
             if (array_key_exists($database_start->vliegtuig_id, $starts)) {     // previous flight is not landed
@@ -248,7 +260,7 @@ function load_starts() : array {
             $kist = ($idx === false) ? null : $t[$idx];
             $reg_call = isset($kist) ? $kist->reg_call : $database_start->vliegtuig_id;
 
-            $debug->echo("** " . $reg_call . " " . $s->starttijd . " **");
+            $debug->echo("** " . $reg_call . " " . $s->starttijd . "/" . $s->starttijd . " **");
         }
     }
 

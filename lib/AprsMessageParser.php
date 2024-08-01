@@ -15,6 +15,9 @@ class AprsMessageParser {
   public OgnSenderBeaconMessage $ogn_sender_beacon_message;
 
   public function __construct($line_item) {
+    $debug = new Debug();
+    $debug->echo("OGN:" . $line_item);
+
     $this->ogn_sender_beacon_message = new OgnSenderBeaconMessage($line_item);
     $this->ogn_sender_beacon_message->flarm_id = $this->get_flarm_id();
 
@@ -230,7 +233,13 @@ class AprsMessageParser {
 
   // feet to meters = 0.3048
   private function parse_altitude($raw_altitude) : void {
-    $this->ogn_sender_beacon_message->altitude = floor(0.3048 *preg_replace("/A=/", "", $raw_altitude));
+    $a = preg_replace("/A=/", "", $raw_altitude);
+
+    if (!is_numeric($a)) {
+        $this->ogn_sender_beacon_message->altitude = -1;
+      return;
+    }
+    $this->ogn_sender_beacon_message->altitude = floor(0.3048 * $a);
   }
 
   private function parse_id(&$msg) : bool {
