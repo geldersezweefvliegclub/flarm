@@ -75,7 +75,7 @@ while (1) {
         for ($i = 0; $i < count($data_array); $i++)
         {
             $start = null;
-            $data = isset($last_data_record) && ($i == 0) ? $last_data_record . $data_array[$i] : $data_array[$i];
+            $data = isset($last_data_record) && ($i == 0) && substr($last_data_record, -1) != "\r" ? $last_data_record . $data_array[$i] : $data_array[$i];
 
             // sentence must contain a '>' character
             if ((strpos($data, '>') === false) || strpos($data, "\r") === false) {
@@ -122,7 +122,7 @@ while (1) {
 
                 if (!array_key_exists($flarm_id, $previous_updates)) {
                     $result = register_aircraft($aircraft_db_id);
-                    $debug->echo("REGISTERED " . $flarm_data->reg_call);
+                    $debug->echo(sprintf("REGISTERED %s", $flarm_data->reg_call));
                 }
 
                 if (array_key_exists($flarm_id, $previous_updates) &&
@@ -135,12 +135,12 @@ while (1) {
                     if (array_key_exists($aircraft_db_id, $db_starts_array))
                     {
                         $start = $db_starts_array[$aircraft_db_id];
-                        $debug->echo("------- LANDING:" . $flarm_data->reg_call . " " . $start->id);
+                        $debug->echo(sprintf("------- LANDING: %s %s", $flarm_data->reg_call, $start->id));
                         register_landing($start->id);
                     }
                     else
                     {
-                        $debug->echo("------- landing:" . $flarm_data->reg_call . " NO START");
+                        $debug->echo(sprintf("------- landing: %s NO START", $flarm_data->reg_call));
 
                     }
                 }
@@ -203,54 +203,54 @@ function load_starts() : array {
     if ($json_data) {
         $starts = array();
         foreach($json_data->dataset as $jsonstarts) {
-            $database_start = DatabaseStart::fromObject( $jsonstarts );
+            $json_start = DatabaseStart::fromObject( $jsonstarts );
 
             $t = $array = array_values($db_aircraft_array);
-            $idx = array_search($database_start->vliegtuig_id, array_column($t, 'id'));
+            $idx = array_search($json_start->vliegtuig_id, array_column($t, 'id'));
 
             $kist = ($idx === false) ? null : $t[$idx];
-            $reg_call = isset($kist) ? $kist->reg_call : $database_start->vliegtuig_id;
+            $reg_call = isset($kist) ? $kist->reg_call : $json_start->vliegtuig_id;
 
             // Is deze start op het veld waarvoor we de data willen hebben?
-            if (isset($database_start->veld_id) && isset($airport)) {
-                if ($airport->ID != $database_start->veld_id) {
-                    $debug->echo($database_start->id . "/" .$database_start->reg_call . " Continue veld_id " . $database_start->veld_id . "/" . $airport->ID);
+            if (isset($json_start->veld_id) && isset($airport)) {
+                if ($airport->ID != $json_start->veld_id) {
+                    $debug->echo(sprintf("%s Continue veld_id %s/%s", $json_start->reg_call, $json_start->veld_id, $airport->ID));
                     continue;
                 }
             }
 
-            if (!isset($database_start->starttijd)) {   // not yet started
-                $debug->echo( $reg_call . " nog niet gestart continue" . $database_start->starttijd);
+            if (!isset($json_start->starttijd)) {   // not yet started
+                $debug->echo( sprintf("%s/%s nog niet gestart continue",  $json_start->id, $json_start->reg_call));
                 continue;
             }
 
-            if (isset($database_start->landingsdatum)) {   // already landed
+            if (isset($json_start->landingstijd)) {   // already landed
                 $now = date("h") * 60 + date("i");
-                $landingstijd = (explode(":", $database_start->landingsdatum)[0])*60 + (explode(":", $database_start->landingsdatum)[1])*1;
+                $landingstijd = (explode(":", $json_start->landingstijd)[0])*60 + (explode(":", $json_start->landingstijd)[1])*1;
 
                 if ($now - $landingstijd > 15) {
                     continue;
                 }
             }
 
-            if (array_key_exists($database_start->vliegtuig_id, $starts)) {     // previous flight is not landed
-                $debug->echo("Er is al een start voor " .$reg_call . " " . $starts[$database_start->vliegtuig_id]->starttijd . " " . $database_start->starttijd);
+            // gebruik altijd de start met de laatste starttijd
+            if (array_key_exists($json_start->vliegtuig_id, $starts)) {
+                $debug->echo(sprintf ("Er is al een start voor %s %s/%s",
+                    $reg_call,
+                    $starts[$json_start->vliegtuig_id]->starttijd, $json_start->starttijd));
 
                 // maak van tijd een numerieke waarde om te kunnen vergelijken
-                $tijd1 = str_replace(":", "0", $starts[$database_start->vliegtuig_id]->starttijd) * 1;
-                $tijd2 = str_replace(":", "0", $database_start->starttijd) * 1;
+                $tijd1 = str_replace(":", "0", $starts[$json_start->vliegtuig_id]->starttijd) * 1;
+                $tijd2 = str_replace(":", "0", $json_start->starttijd) * 1;
 
-                if ($tijd1 < $tijd2)   // use latest start
+                if ($tijd1 > $tijd2)   // use latest start
                 {
-                    $debug->echo($database_start->id . " Continue");
+                    $debug->echo(sprintf("Start %s wordt overschreven door %s, starttijd %s is later",
+                        $starts[$json_start->vliegtuig_id]->id, $json_start->id), $json_start->starttijd);
                     continue;
                 }
-                else
-                {
-                    $debug->echo($starts[$database_start->vliegtuig_id]->id . " Wordt overschreven");
-                }
             }
-            $starts[$database_start->vliegtuig_id] = $database_start;
+            $starts[$json_start->vliegtuig_id] = $json_start;
         }
 
         foreach($starts as $s)
@@ -259,9 +259,9 @@ function load_starts() : array {
             $idx = array_search($s->vliegtuig_id, array_column($t, 'id'));
 
             $kist = ($idx === false) ? null : $t[$idx];
-            $reg_call = isset($kist) ? $kist->reg_call : $database_start->vliegtuig_id;
+            $reg_call = isset($kist) ? $kist->reg_call : $json_start->vliegtuig_id;
 
-            $debug->echo("** " . $reg_call . " " . $s->starttijd . "/" . $s->starttijd . " **");
+            $debug->echo( sprintf("** %s  %s/%s", $reg_call, $s->starttijd, $s->landingstijd. " **"));
         }
     }
 
@@ -312,7 +312,7 @@ function check_delayed_landings($last_updates, $db_starts_array) {
 
 function register_landing(string $start_id) : mixed {
     $debug = new Debug();
-    $debug->echo("ID:". $start_id);
+    $debug->echo(sprintf("ID: %s", $start_id));
 
     $curl = new Curl();
     $start = $curl->exec_get(START_OPHALEN, ["ID" => $start_id]);
