@@ -53,7 +53,6 @@ $program_timer = new ProgramTimer(PROGRAM_START_TIME_HOUR, PROGRAM_END_TIME_HOUR
 $last_data_record = null;
 
 
-
 while (1) {
     if ($program_timer->can_run())
     {
@@ -133,12 +132,6 @@ while (1) {
 
                 if (isset($flarm_data->kalman_speed) && isset($flarm_data->kalman_altitude) && (array_key_exists($flarm_id, $previous_updates)))
                 {
-                    if ($previous_updates[$flarm_id]->status == GliderStatus::Unknown)
-                    {
-                        if (($flarm_data->kalman_speed < MIN_SPEED) && ($flarm_data->kalman_altitude < (VLIEGVELD_HOOGTE + 50)))
-                            $flarm_data->status = GliderStatus::On_Ground;
-                    }
-
                     if (($flarm_data->kalman_speed > MIN_SPEED) && ($flarm_data->kalman_altitude < (VLIEGVELD_HOOGTE + 250) &&
                         ($previous_updates[$flarm_id]->status == GliderStatus::Flying)))
                     {
@@ -153,23 +146,26 @@ while (1) {
                     {
                         $flarm_data->status = GliderStatus::Flying;
                     }
-                    else if ($flarm_data->kalman_speed < MIN_SPEED && ($flarm_data->kalman_altitude < (VLIEGVELD_HOOGTE + 50)) &&
-                            ($previous_updates[$flarm_id]->status == GliderStatus::Landing))
-                    {
-                        if (array_key_exists($aircraft_db_id, $db_starts_array))
+                    else if ($flarm_data->kalman_speed < MIN_SPEED && ($flarm_data->kalman_altitude < (VLIEGVELD_HOOGTE + 50))) {
+                        // als flarm updates goed doorkomen dat is status Landing, echter als we updates gemiste hebben dan moeten we een fallback hebben
+                        // Wanneer vliegtuig flarm aanzet op het veld is de status Unknown
+                        // Logica: indien de snelheid constant is (waarschijnlijk 0) dan staat het vliegtuig met zekerheid aan de grond
+
+                        if (($previous_updates[$flarm_id]->status == GliderStatus::Landing) || ($flarm_data->kalman_speed == $previous_updates[$flarm_id]->kalman_speed))
                         {
-                            $start = $db_starts_array[$aircraft_db_id];
-                            $debug->echo(sprintf("------- LANDING: %s %s", $flarm_data->reg_call, $start->id));
-                            register_landing($start->id);
+                            if (array_key_exists($aircraft_db_id, $db_starts_array)) {
+                                $start = $db_starts_array[$aircraft_db_id];
+                                $debug->echo(sprintf("------- LANDING: %s %s", $flarm_data->reg_call, $start->id));
+                                register_landing($start->id);
+                            }
+                            else if ($previous_updates[$flarm_id]->status == GliderStatus::Landing)
+                                $debug->echo(sprintf("------- landing: %s NO START", $flarm_data->reg_call));
+
+                            $flarm_data->status = GliderStatus::On_Ground;
                         }
-                        else
-                        {
-                            $debug->echo(sprintf("------- landing: %s NO START", $flarm_data->reg_call));
-                        }
-                        $flarm_data->status = GliderStatus::On_Ground;
                     }
 
-                    // No new status, keep the old one
+                    // geen nieuwe status, neem de oude status over
                     if ($flarm_data->status == GliderStatus::Unknown)
                         $flarm_data->status = $previous_updates[$flarm_id]->status;
                 }
@@ -330,8 +326,8 @@ function check_lost()
     $tobeRemoved = array();
     foreach ($previous_updates as $flarm_data)
     {
-        if (($now - $flarm_data->msg_received) < 60)
-            continue;       // update received less than a minute ago
+        if (($now - $flarm_data->msg_received) < 600)
+            continue;       // update received less than 10 minutes ago
 
         if ($flarm_data->status == GliderStatus::Landing)
         {
@@ -343,7 +339,9 @@ function check_lost()
 
                     $debug = new Debug();
                     $debug->echo(sprintf("------- DELAYED LANDING: %s %s", $flarm_data->reg_call, $start->id));
-                    register_landing($start->id);
+
+                    $landingstijd = strtotime('-5 minutes');
+                    register_landing($start->id, date('H:i', $landingstijd));
                 }
             }
         }
@@ -356,13 +354,15 @@ function check_lost()
     }
 }
 
-function register_landing(string $start_id) : mixed {
+function register_landing(string $start_id, $landingstijd = null) : mixed {
     $curl = new Curl();
     $start = $curl->exec_get(START_OPHALEN, ["ID" => $start_id]);
 
+    $l = ($landingstijd == null) ? date("H:i") : $landingstijd;
+
     // niet nog een keer registreren
     if (!isset($start->EXTERNAL_ID)) {
-        return $curl->exec_put(START_OPSLAAN, ["ID" => $start_id, "EXTERNAL_ID" => date("H:i")]);
+        return $curl->exec_put(START_OPSLAAN, ["ID" => $start_id, "EXTERNAL_ID" => $l]);
     }
     return null;
 }
