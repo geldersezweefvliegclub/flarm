@@ -168,13 +168,17 @@ while (1) {
                         }
                         $flarm_data->status = GliderStatus::On_Ground;
                     }
+
+                    // No new status, keep the old one
+                    if ($flarm_data->status == GliderStatus::Unknown)
+                        $flarm_data->status = $previous_updates[$flarm_id]->status;
                 }
             }
             $previous_updates[$flarm_id] = $flarm_data;
 
             $str = isset($flarm_data->reg_call) ? $flarm_data->reg_call : $flarm_data->flarm_id;
             $txt = isset($start->id) ? $start->id : "-";
-            $msg = sprintf("Ontvangen: %s start ID: %s  GS:%s|%s ALT:%s|%s  %s", $str,  $txt, $flarm_data->ground_speed, $flarm_data->kalman_speed, $flarm_data->altitude, $flarm_data->kalman_altitude, $flarm_data->status);
+            $msg = sprintf("Ontvangen: %s start ID: %s  GS:%s|%s ALT:%s|%s  %s", $str,  $txt, $flarm_data->ground_speed, $flarm_data->kalman_speed, $flarm_data->altitude, $flarm_data->kalman_altitude, $flarm_data->status->value);
             $debug->echo($msg);
         }
         $last_data_record = count($data_array) > 0 ? $data_array[count($data_array) - 1] : null;
