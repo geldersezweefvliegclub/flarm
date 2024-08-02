@@ -9,8 +9,6 @@ if (!file_exists("include/config.php"))
     die;
 }
 
-
-
 include 'lib/APRS.php';
 include 'lib/AprsMessageParser.php';
 include 'lib/DatabaseAircraft.php';
@@ -27,10 +25,13 @@ include_once 'enum/AircraftStatus.php';
 
 date_default_timezone_set('Europe/Amsterdam');
 
+// 30 k/m is the minimum sneldheid om te vliegen
+const MIN_SPEED = 30;
+
 $debug = new Debug();
 $db_aircraft_load_timer = new CountdownTimer(REFRESH_FROM_AIRCRAFT_DB_MINUTES);
 $db_starts_load_timer = new CountdownTimer(REFRESH_FROM_STARTS_DB_MINUTES);
-$check_delayed_landings_timer = new CountdownTimer(DELAYED_LANDING_MINUTES);
+$check_lost_timer = new CountdownTimer(DELAYED_LANDING_MINUTES);
 
 //create an array of all aircraft we are concerned about indexed by flarm ID
 $db_aircraft_array = load_aircraft();
@@ -41,7 +42,7 @@ $airport = load_airports();
 $db_starts_array = load_starts();
 $db_starts_load_timer->start();
 
-$check_delayed_landings_timer->start();
+$check_lost_timer->start();
 $previous_updates = array();            // array to store the last time we updated the aircraft in the helios database
 $kalman_speed_array = array();          // array to store the kalman filter for the speed
 $kalman_altitude_array = array();       // array to store the kalman filter for the altitude
@@ -54,7 +55,8 @@ $last_data_record = null;
 
 
 while (1) {
-    if ($program_timer->can_run()) {
+    if ($program_timer->can_run())
+    {
         if ($db_aircraft_load_timer->is_timer_expired()) {
             $db_aircraft_array = load_aircraft();
             $db_aircraft_load_timer->start();
@@ -65,9 +67,9 @@ while (1) {
             $db_starts_load_timer->start();
         }
 
-        if ($check_delayed_landings_timer->is_timer_expired()) {
-            check_delayed_landings($previous_updates, $db_starts_array);
-            $check_delayed_landings_timer->start();
+        if ($check_lost_timer->is_timer_expired()) {
+            check_lost();
+            $check_lost_timer->start();
         }
 
         if (!$aprs->is_connected()) {
@@ -122,35 +124,49 @@ while (1) {
                 $flarm_data->vliegtuig_id = $aircraft_db_id;
 
                 if (array_key_exists($aircraft_db_id, $db_starts_array))
-                {
                     $start = $db_starts_array[$aircraft_db_id];
-                }
 
                 if (!array_key_exists($flarm_id, $previous_updates)) {
                     $result = register_aircraft($aircraft_db_id);
                     $debug->echo(sprintf("REGISTERED %s", $flarm_data->reg_call));
                 }
 
-                if (isset($flarm_data->kalman_speed) && isset($flarm_data->kalman_altitude)) {
-                    // 30 k/m is the minimum sneldheid om te vliegen
-                    if (array_key_exists($flarm_id, $previous_updates) &&
-                        $flarm_data->kalman_altitude < (VLIEGVELD_HOOGTE + 250) &&
-                        isset($previous_updates[$flarm_id]->kalman_speed) &&
-                        $previous_updates[$flarm_id]->kalman_speed >= 30 &&
-                        $flarm_data->kalman_speed < 30 &&
-                        $previous_updates[$flarm_id]->status == AircraftStatus::Flying) {
-                        if (array_key_exists($aircraft_db_id, $db_starts_array)) {
+                if (isset($flarm_data->kalman_speed) && isset($flarm_data->kalman_altitude) && (array_key_exists($flarm_id, $previous_updates)))
+                {
+                    if ($previous_updates[$flarm_id]->status == GliderStatus::Unknown)
+                    {
+                        if (($flarm_data->kalman_speed < MIN_SPEED) && ($flarm_data->kalman_altitude < (VLIEGVELD_HOOGTE + 50)))
+                            $flarm_data->status = GliderStatus::On_Ground;
+                    }
+
+                    if (($flarm_data->kalman_speed > MIN_SPEED) && ($flarm_data->kalman_altitude < (VLIEGVELD_HOOGTE + 250) &&
+                        ($previous_updates[$flarm_id]->status == GliderStatus::Flying)))
+                    {
+                        $flarm_data->status = GliderStatus::Landing;
+                    }
+                    else if (($flarm_data->kalman_speed > MIN_SPEED) && ($flarm_data->kalman_altitude > (VLIEGVELD_HOOGTE + 50)) &&
+                            ($previous_updates[$flarm_id]->status == GliderStatus::On_Ground))
+                    {
+                        $flarm_data->status = GliderStatus::TakeOff;
+                    }
+                    else if (($flarm_data->kalman_speed > MIN_SPEED) && ($flarm_data->kalman_altitude > (VLIEGVELD_HOOGTE + 250)))
+                    {
+                        $flarm_data->status = GliderStatus::Flying;
+                    }
+                    else if ($flarm_data->kalman_speed < MIN_SPEED && ($flarm_data->kalman_altitude < (VLIEGVELD_HOOGTE + 50)) &&
+                            ($previous_updates[$flarm_id]->status == GliderStatus::Landing))
+                    {
+                        if (array_key_exists($aircraft_db_id, $db_starts_array))
+                        {
                             $start = $db_starts_array[$aircraft_db_id];
                             $debug->echo(sprintf("------- LANDING: %s %s", $flarm_data->reg_call, $start->id));
                             register_landing($start->id);
-                        } else {
+                        }
+                        else
+                        {
                             $debug->echo(sprintf("------- landing: %s NO START", $flarm_data->reg_call));
                         }
                         $flarm_data->status = GliderStatus::On_Ground;
-                    }
-
-                    if (($flarm_data->kalman_speed > 30) && ($flarm_data->kalman_altitude > (VLIEGVELD_HOOGTE + 50))) {
-                        $flarm_data->status = GliderStatus::Flying;
                     }
                 }
             }
@@ -182,7 +198,6 @@ while (1) {
 
         sleep(600);    // sleep for 10 minutes
     }
-
 }
 
 function load_aircraft() : array {
@@ -301,28 +316,43 @@ function register_aircraft(string $aircraft_id) : mixed {
     return $curl->exec_post(VLIEGTUIGEN_AANMELDEN, $args);
 }
 
-function check_delayed_landings($last_updates, $db_starts_array) {
-    if ($db_starts_array == null || count($db_starts_array) == 0) {
-        return;
-    }
+function check_lost()
+{
+    global $db_starts_array;
+    global $previous_updates;
+
     $now = date("H") * 3600 + date("i") * 60 + date("s");
 
-    foreach ($last_updates as $flarm_data) {
-        if (($flarm_data->altitude < (VLIEGVELD_HOOGTE + 250)) && ($flarm_data->ground_speed > 50) && (($now - $flarm_data->msg_received) > 45)) {
-            $aircraft_db_id = $flarm_data->vliegtuig_id;
-            if (array_key_exists($aircraft_db_id, $db_starts_array)) {
-                $start = $db_starts_array[$aircraft_db_id];
+    $tobeRemoved = array();
+    foreach ($previous_updates as $flarm_data)
+    {
+        if (($now - $flarm_data->msg_received) < 60)
+            continue;       // update received less than a minute ago
 
-                register_landing($start->id);
+        if ($flarm_data->status == GliderStatus::Landing)
+        {
+            if ($db_starts_array !== null && count($db_starts_array) > 0)
+            {
+                $aircraft_db_id = $flarm_data->vliegtuig_id;
+                if (array_key_exists($aircraft_db_id, $db_starts_array)) {
+                    $start = $db_starts_array[$aircraft_db_id];
+
+                    $debug = new Debug();
+                    $debug->echo(sprintf("------- DELAYED LANDING: %s %s", $flarm_data->reg_call, $start->id));
+                    register_landing($start->id);
+                }
             }
         }
+        $tobeRemoved[] = $flarm_data->flarm_id;
+    }
+
+    // Remove the lost aircraft from the previous_updates array
+    foreach ($tobeRemoved as $flarm_id) {
+        unset($previous_updates[$flarm_id]);
     }
 }
 
 function register_landing(string $start_id) : mixed {
-    $debug = new Debug();
-    $debug->echo(sprintf("ID: %s", $start_id));
-
     $curl = new Curl();
     $start = $curl->exec_get(START_OPHALEN, ["ID" => $start_id]);
 
