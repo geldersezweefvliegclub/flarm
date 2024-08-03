@@ -355,13 +355,16 @@ function check_lost()
 }
 
 function register_landing(string $start_id, $landingstijd = null) : mixed {
+    $debug = new Debug();
+
     $curl = new Curl();
     $start = $curl->exec_get(START_OPHALEN, ["ID" => $start_id]);
 
-    $l = ($landingstijd == null) ? date("H:i") : $landingstijd;
-
     // niet nog een keer registreren
     if (!isset($start->EXTERNAL_ID)) {
+        $l = ($landingstijd == null) ? date("H:i") : $landingstijd;
+        $debug->echo(sprintf("register_landing(%s, %s)", $start_id, $l));
+
         return $curl->exec_put(START_OPSLAAN, ["ID" => $start_id, "EXTERNAL_ID" => $l]);
     }
     return null;
