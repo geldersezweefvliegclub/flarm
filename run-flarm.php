@@ -104,6 +104,7 @@ while (1) {
 
             $flarm_id = strtolower($flarm_data->flarm_id);
 
+            // bepaal de kalman filter voor de snelheid en de hoogte
             if (!array_key_exists($flarm_id, $kalman_speed_array)) {
                 $kalman_speed_array[$flarm_id]= new KalmanFilter();
             }
@@ -115,7 +116,9 @@ while (1) {
             }
             $kalman_altitude = $kalman_altitude_array[$flarm_id];
             $flarm_data->kalman_altitude = $kalman_altitude->filter($flarm_data->altitude);
+            // done
 
+            // bepaal de status van het vliegtuig
             if (isset($db_aircraft_array[$flarm_id]))
             {
                 $aircraft_db_id = $db_aircraft_array[$flarm_id]->id;
@@ -132,8 +135,17 @@ while (1) {
 
                 if (isset($flarm_data->kalman_speed) && isset($flarm_data->kalman_altitude) && (array_key_exists($flarm_id, $previous_updates)))
                 {
-                    if (($flarm_data->kalman_speed > MIN_SPEED) && ($flarm_data->kalman_altitude < (VLIEGVELD_HOOGTE + 250) &&
-                        ($previous_updates[$flarm_id]->status == GliderStatus::Flying)))
+                    if (($flarm_data->kalman_speed > MIN_SPEED) &&
+                        ($flarm_data->kalman_altitude <= (VLIEGVELD_HOOGTE + 250)) &&
+                        ($flarm_data->kalman_altitude > (VLIEGVELD_HOOGTE + 50)) &&
+                        ($previous_updates[$flarm_id]->status == GliderStatus::Flying))
+                    {
+                        $flarm_data->status = GliderStatus::Circuit;
+                    }
+                    else if (($flarm_data->kalman_speed > MIN_SPEED) &&
+                             ($flarm_data->kalman_altitude <= (VLIEGVELD_HOOGTE + 50)) &&
+                             (($previous_updates[$flarm_id]->status == GliderStatus::Flying) ||
+                             ($previous_updates[$flarm_id]->status == GliderStatus::Circuit)))
                     {
                         $flarm_data->status = GliderStatus::Landing;
                     }
@@ -146,21 +158,27 @@ while (1) {
                     {
                         $flarm_data->status = GliderStatus::Flying;
                     }
-                    else if ($flarm_data->kalman_speed < MIN_SPEED && ($flarm_data->kalman_altitude < (VLIEGVELD_HOOGTE + 50))) {
+                    else if ($flarm_data->kalman_speed <= MIN_SPEED && ($flarm_data->kalman_altitude <= (VLIEGVELD_HOOGTE + 50)))
+                    {
                         // als flarm updates goed doorkomen dat is status Landing, echter als we updates gemiste hebben dan moeten we een fallback hebben
                         // Wanneer vliegtuig flarm aanzet op het veld is de status Unknown
                         // Logica: indien de snelheid constant is (waarschijnlijk 0) dan staat het vliegtuig met zekerheid aan de grond
 
-                        if (($previous_updates[$flarm_id]->status == GliderStatus::Landing) || ($flarm_data->kalman_speed == $previous_updates[$flarm_id]->kalman_speed))
+                        $staat_stil = ($flarm_data->kalman_speed == $previous_updates[$flarm_id]->kalman_speed);    // snelheid is constant, waarschijnlijk 0
+                        if (($previous_updates[$flarm_id]->status == GliderStatus::Circuit) ||
+                            ($previous_updates[$flarm_id]->status == GliderStatus::Landing) || $staat_stil)
                         {
-                            if (array_key_exists($aircraft_db_id, $db_starts_array)) {
-                                $start = $db_starts_array[$aircraft_db_id];
-                                $debug->echo(sprintf("------- LANDING: %s %s", $flarm_data->reg_call, $start->id));
-                                register_landing($start->id);
-                            }
-                            else if ($previous_updates[$flarm_id]->status == GliderStatus::Landing)
-                                $debug->echo(sprintf("------- landing: %s NO START", $flarm_data->reg_call));
+                            if (($previous_updates[$flarm_id]->status == GliderStatus::Circuit) ||
+                                ($previous_updates[$flarm_id]->status == GliderStatus::Landing)) {
 
+                                if (array_key_exists($aircraft_db_id, $db_starts_array)) {
+                                    $start = $db_starts_array[$aircraft_db_id];
+                                    $debug->echo(sprintf("------- LANDING: %s %s", $flarm_data->reg_call, $start->id));
+                                    register_landing($start->id);
+                                } else {
+                                    $debug->echo(sprintf("------- LANDING: %s NO START", $flarm_data->reg_call));
+                                }
+                            }
                             $flarm_data->status = GliderStatus::On_Ground;
                         }
                     }
@@ -169,6 +187,10 @@ while (1) {
                     if ($flarm_data->status == GliderStatus::Unknown)
                         $flarm_data->status = $previous_updates[$flarm_id]->status;
                 }
+            }
+            else
+            {
+                $flarm_data->status = GliderStatus::NoIntrest;
             }
             $previous_updates[$flarm_id] = $flarm_data;
 
@@ -329,7 +351,7 @@ function check_lost()
         if (($now - $flarm_data->msg_received) < 600)
             continue;       // update received less than 10 minutes ago
 
-        if ($flarm_data->status == GliderStatus::Landing)
+        if ($flarm_data->status == GliderStatus::Circuit || $flarm_data->status == GliderStatus::Landing)
         {
             if ($db_starts_array !== null && count($db_starts_array) > 0)
             {
@@ -363,7 +385,7 @@ function register_landing(string $start_id, $landingstijd = null) : mixed {
     // niet nog een keer registreren
     if (!isset($start->EXTERNAL_ID)) {
         $l = ($landingstijd == null) ? date("H:i") : $landingstijd;
-        $debug->echo(sprintf("register_landing(%s, %s)", $start_id, $l));
+        $debug->echo(sprintf("register_landing(%s, %s) -> %s", $start_id, $landingstijd, $l));
 
         return $curl->exec_put(START_OPSLAAN, ["ID" => $start_id, "EXTERNAL_ID" => $l]);
     }
