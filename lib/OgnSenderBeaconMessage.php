@@ -32,6 +32,8 @@ class OgnSenderBeaconMessage {
 
   public int $kalman_speed;
   public int $kalman_altitude;
+  public int $kalman_vertical_speed_fpm;
+
 
   public GliderStatus $status;
 
