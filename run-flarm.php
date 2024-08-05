@@ -125,14 +125,13 @@ while (1) {
             $flarm_data->kalman_vertical_speed_fpm = $kalman_altitude->filter($flarm_data->vertical_speed_fpm);
             // done
 
-            setGliderStatus($flarm_data);
-
-            $previous_updates[$flarm_id] = $flarm_data;
-
             $str = isset($flarm_data->reg_call) ? $flarm_data->reg_call : $flarm_data->flarm_id;
             $txt = isset($start->id) ? $start->id : "-";
             $msg = sprintf("Ontvangen: %s start ID: %s  GS:%s|%s ALT:%s|%s  %s", $str,  $txt, $flarm_data->ground_speed, $flarm_data->kalman_speed, $flarm_data->altitude, $flarm_data->kalman_altitude, $flarm_data->status->value);
             $debug->echo($msg);
+
+            setGliderStatus($flarm_data);
+            $previous_updates[$flarm_id] = $flarm_data;
         }
         $last_data_record = count($data_array) > 0 ? $data_array[count($data_array) - 1] : null;
         sleep(1);    // sleep for a second to prevent cpu spinning
@@ -163,8 +162,6 @@ function setGliderStatus($flarm_data) {
     global $previous_updates;
 
     $debug = new Debug();
-    $debug->echo("setGliderStatus()");
-
     $flarm_id = strtolower($flarm_data->flarm_id);
 
     if (isset($db_aircraft_array[$flarm_id]))
@@ -279,10 +276,8 @@ function load_starts() : array {
 
             // Is deze start op het veld waarvoor we de data willen hebben?
             if (isset($json_start->veld_id) && isset($airport)) {
-                if ($airport->ID != $json_start->veld_id) {
-                    $debug->echo(sprintf("%s Continue veld_id %s/%s", $json_start->reg_call, $json_start->veld_id, $airport->ID));
+                if ($airport->ID != $json_start->veld_id)
                     continue;
-                }
             }
 
             if (!isset($json_start->starttijd)) {   // not yet started
@@ -371,31 +366,38 @@ function check_lost()
     {
         // if we have not received an update for 1 minute and the aircraft is in the circuit or landing, we predict the altitude and check if it is below the airfield height
         // if so, we consider the aircraft as landed
-        if ((($now - $flarm_data->msg_received) > 60) &&
-             ($flarm_data->status == GliderStatus::Circuit || $flarm_data->status == GliderStatus::Landing))    // update received more than 1 minute ago
+        if (($now - $flarm_data->msg_received) >= 60)
         {
-            $dt = ($now - $flarm_data->msg_received) / 60;      // in minutes
-            $predicted_altitude = $flarm_data->altitude + ($flarm_data->kalman_vertical_speed_fpm * $dt) * 0.3048; // in meters
+            $debug->echo(sprintf("lost 1 min: %s %s", $flarm_data->reg_call, $flarm_data->status->value));
 
-            if ($predicted_altitude < (VLIEGVELD_HOOGTE))
+            if (($flarm_data->status == GliderStatus::Circuit || $flarm_data->status == GliderStatus::Landing))    // update received more than 1 minute ago)
             {
-                if ($db_starts_array !== null && count($db_starts_array) > 0)
-                {
-                    $aircraft_db_id = $flarm_data->vliegtuig_id;
-                    if (array_key_exists($aircraft_db_id, $db_starts_array)) {
-                        $start = $db_starts_array[$aircraft_db_id];
+                $dt = ($now - $flarm_data->msg_received) / 60;      // in minutes
+                $predicted_altitude = $flarm_data->altitude + ($flarm_data->kalman_vertical_speed_fpm * $dt) * 0.3048; // in meters
+                $debug->echo(sprintf("last altitude: %s   vspeed_fpm: %d time: %d predicted altitude: %s",
+                        $flarm_data->altitude,
+                        $flarm_data->kalman_vertical_speed_fpm,
+                        $dt,  $predicted_altitude));
 
-                        $debug->echo(sprintf("------- PREDICTED LANDING: %s %s", $flarm_data->reg_call, $start->id));
-                        register_landing($start->id);
+                if ($predicted_altitude < (VLIEGVELD_HOOGTE))
+                {
+                    if ($db_starts_array !== null && count($db_starts_array) > 0)
+                    {
+                        $aircraft_db_id = $flarm_data->vliegtuig_id;
+                        if (array_key_exists($aircraft_db_id, $db_starts_array)) {
+                            $start = $db_starts_array[$aircraft_db_id];
+
+                            $debug->echo(sprintf("------- PREDICTED LANDING: %s %s", $flarm_data->reg_call, $start->id));
+                            register_landing($start->id);
+                        }
                     }
+                    unset($previous_updates[$flarm_data->flarm_id]);
                 }
-                unset($previous_updates[$flarm_data->flarm_id]);
             }
         }
 
         if (($now - $flarm_data->msg_received) < 600)
             continue;       // update received less than 10 minutes ago
-
 
         // if we have not received an update for 10 minutes and the aircraft is in the circuit or landing, we consider the aircraft as landed
         // the vertical speed prediction did not work, so we have to rely on the time
@@ -419,7 +421,9 @@ function check_lost()
     }
 
     // Remove the lost aircraft from the previous_updates array
-    foreach ($tobeRemoved as $flarm_id) {
+    foreach ($tobeRemoved as $flarm_id)
+    {
+        $debug->echo(sprintf("Unset: %s", $flarm_id));
         unset($previous_updates[$flarm_id]);
     }
 }
