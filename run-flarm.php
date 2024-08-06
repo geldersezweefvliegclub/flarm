@@ -173,7 +173,7 @@ function setGliderStatus($flarm_data) {
     $aircraft_db_id = $db_aircraft_array[$flarm_id]->id;
     $flarm_data->reg_call = $db_aircraft_array[$flarm_id]->reg_call;
     $flarm_data->vliegtuig_id = $aircraft_db_id;
-    $flarm_data->start_id = (array_key_exists($aircraft_db_id, $db_starts_array) ? $db_starts_array[$aircraft_db_id] : null);
+    $flarm_data->start_id = (array_key_exists($aircraft_db_id, $db_starts_array) ? $db_starts_array[$aircraft_db_id]->id : null);
 
     if (!array_key_exists($flarm_id, $previous_updates)) {
         $result = register_aircraft($aircraft_db_id);
@@ -305,8 +305,11 @@ function load_starts() : array {
 
                 if ($tijd1 > $tijd2)   // use latest start
                 {
-                    $debug->echo(sprintf("Start %s wordt overschreven door %s, starttijd %s is later",
-                        $starts[$json_start->vliegtuig_id]->id, $json_start->id), $json_start->starttijd);
+                    $debug->echo(sprintf("%s Start %s wordt overschreven door %s, starttijd %s is later",
+                        $reg_call,
+                        $starts[$json_start->vliegtuig_id]->id,
+                        $json_start->id),
+                        $json_start->starttijd);
                     continue;
                 }
             }
@@ -354,7 +357,6 @@ function register_aircraft(string $aircraft_id) : mixed {
 
 function check_lost()
 {
-    global $db_starts_array;
     global $previous_updates;
 
     $debug = new Debug();

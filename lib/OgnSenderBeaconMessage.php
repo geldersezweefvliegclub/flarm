@@ -40,7 +40,7 @@ class OgnSenderBeaconMessage {
   // link with helios database
   public string | null $reg_call = null;                      // registration callsing from the helios database
   public int | null $vliegtuig_id = null;                     // flarmcode from the helios database
-  public string | null $start_id = null;                         // start id from the helios database
+  public int | null $start_id = null;                         // start id from the helios database
   public int $msg_received;                                   // number of messages received for this beacon
 
   /**
