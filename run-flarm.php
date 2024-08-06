@@ -423,9 +423,25 @@ function check_lost()
     // Remove the lost aircraft from the previous_updates array
     foreach ($tobeRemoved as $flarm_id)
     {
-        $debug->echo(sprintf("Unset: %s", $flarm_id));
+        $debug->echo(sprintf("Unset: %s %s", $flarm_id, $previous_updates[$flarm_id]->reg_call));
         unset($previous_updates[$flarm_id]);
     }
+
+    // show the remaining aircraft in the previous_updates array
+    $inMemory = "";
+    foreach ($previous_updates as $flarm_data)
+    {
+        $reg_call = isset($flarm_data->reg_call) ? $flarm_data->reg_call : $flarm_data->flarm_id;
+        if ($inMemory != "")
+            $inMemory .= ",";
+
+        $inMemory .= sprintf("%s", $reg_call);
+    }
+
+    if ($inMemory != "")
+        $debug->echo(sprintf("previous_updates=[%s]", $inMemory));
+    else
+        $debug->echo("previous_updates is empty");
 }
 
 function register_landing(string $start_id, $landingstijd = null) : mixed {
