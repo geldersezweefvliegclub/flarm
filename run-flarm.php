@@ -408,7 +408,7 @@ function check_lost()
                 $debug->echo(sprintf("------- DELAYED LANDING: %s %s", $flarm_data->reg_call, $flarm_data->start_id));
 
                 $landingstijd = strtotime('-5 minutes');
-                register_landing($start->id, date('H:i', $landingstijd));
+                register_landing($flarm_data->start_id, date('H:i', $landingstijd));
             }
         }
         $tobeRemoved[] = strtolower($flarm_data->flarm_id);
