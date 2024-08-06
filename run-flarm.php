@@ -108,20 +108,17 @@ while (1) {
             if (!array_key_exists($flarm_id, $kalman_speed_array)) {
                 $kalman_speed_array[$flarm_id]= new KalmanFilter();
             }
-            $kalman_speed = $kalman_speed_array[$flarm_id];
-            $flarm_data->kalman_speed = $kalman_speed->filter($flarm_data->ground_speed);
+            $flarm_data->kalman_speed = $kalman_speed_array[$flarm_id]->filter($flarm_data->ground_speed);
 
             if (!array_key_exists($flarm_id, $kalman_altitude_array)) {
                 $kalman_altitude_array[$flarm_id] = new KalmanFilter();
             }
-            $kalman_altitude = $kalman_altitude_array[$flarm_id];
-            $flarm_data->kalman_altitude = $kalman_altitude->filter($flarm_data->altitude);
+            $flarm_data->kalman_altitude = $kalman_altitude_array[$flarm_id]->filter($flarm_data->altitude);
 
             if (!array_key_exists($flarm_id, $kalman_fpm_array)) {
                 $kalman_fpm_array[$flarm_id] = new KalmanFilter();
             }
-            $kalman_fpm = $kalman_fpm_array[$flarm_id];
-            $flarm_data->kalman_vertical_speed_fpm = $kalman_altitude->filter($flarm_data->vertical_speed_fpm);
+            $flarm_data->kalman_vertical_speed_fpm = $kalman_fpm_array[$flarm_id]->filter($flarm_data->vertical_speed_fpm);
             // done
 
             setGliderStatus($flarm_data);
@@ -196,14 +193,14 @@ function setGliderStatus($flarm_data) {
                 $flarm_data->status = GliderStatus::Circuit;
             }
             else if (($flarm_data->kalman_speed > MIN_SPEED) &&
-                ($flarm_data->kalman_altitude <= (VLIEGVELD_HOOGTE + 50)) &&
-                (($previous_updates[$flarm_id]->status == GliderStatus::Flying) ||
-                    ($previous_updates[$flarm_id]->status == GliderStatus::Circuit)))
+                     ($flarm_data->kalman_altitude <= (VLIEGVELD_HOOGTE + 50)) &&
+                        (($previous_updates[$flarm_id]->status == GliderStatus::Flying) ||
+                         ($previous_updates[$flarm_id]->status == GliderStatus::Circuit)))
             {
                 $flarm_data->status = GliderStatus::Landing;
             }
             else if (($flarm_data->kalman_speed > MIN_SPEED) && ($flarm_data->kalman_altitude > (VLIEGVELD_HOOGTE + 50)) &&
-                ($previous_updates[$flarm_id]->status == GliderStatus::On_Ground))
+                     ($previous_updates[$flarm_id]->status == GliderStatus::On_Ground))
             {
                 $flarm_data->status = GliderStatus::TakeOff;
             }
@@ -358,6 +355,9 @@ function register_aircraft(string $aircraft_id) : mixed {
 function check_lost()
 {
     global $previous_updates;
+    global $kalman_speed_array;
+    global $kalman_altitude_array;
+    global $kalman_fpm_array;
 
     $debug = new Debug();
     $now = date("H") * 3600 + date("i") * 60 + date("s");
@@ -388,6 +388,9 @@ function check_lost()
                         register_landing($flarm_data->start_id);
                     }
                     unset($previous_updates[$flarm_data->flarm_id]);
+                    unset($kalman_speed_array[$flarm_data->flarm_id]);
+                    unset($kalman_altitude_array[$flarm_data->flarm_id]);
+                    unset($kalman_fpm_array[$flarm_data->flarm_id]);
                 }
             }
         }
@@ -415,7 +418,11 @@ function check_lost()
     foreach ($tobeRemoved as $flarm_id)
     {
         $debug->echo(sprintf("Unset: %s %s", $flarm_id, $previous_updates[$flarm_id]->reg_call));
+
         unset($previous_updates[$flarm_id]);
+        unset($kalman_speed_array[$flarm_data->flarm_id]);
+        unset($kalman_altitude_array[$flarm_data->flarm_id]);
+        unset($kalman_fpm_array[$flarm_data->flarm_id]);
     }
 
     // show the remaining aircraft in the previous_updates array
