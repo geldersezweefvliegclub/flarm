@@ -417,7 +417,7 @@ function check_lost()
                 }
             }
         }
-        $tobeRemoved[] = $flarm_data->flarm_id;
+        $tobeRemoved[] = strtolower($flarm_data->flarm_id);
     }
 
     // Remove the lost aircraft from the previous_updates array
