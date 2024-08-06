@@ -125,13 +125,13 @@ while (1) {
             $flarm_data->kalman_vertical_speed_fpm = $kalman_altitude->filter($flarm_data->vertical_speed_fpm);
             // done
 
+            setGliderStatus($flarm_data);
+            $previous_updates[$flarm_id] = $flarm_data;
+
             $str = isset($flarm_data->reg_call) ? $flarm_data->reg_call : $flarm_data->flarm_id;
             $txt = isset($start->id) ? $start->id : "-";
             $msg = sprintf("Ontvangen: %s start ID: %s  GS:%s|%s ALT:%s|%s  %s", $str,  $txt, $flarm_data->ground_speed, $flarm_data->kalman_speed, $flarm_data->altitude, $flarm_data->kalman_altitude, $flarm_data->status->value);
             $debug->echo($msg);
-
-            setGliderStatus($flarm_data);
-            $previous_updates[$flarm_id] = $flarm_data;
         }
         $last_data_record = count($data_array) > 0 ? $data_array[count($data_array) - 1] : null;
         sleep(1);    // sleep for a second to prevent cpu spinning
