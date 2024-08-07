@@ -173,7 +173,7 @@ function setGliderStatus($flarm_data) {
     $flarm_data->start_id = (array_key_exists($aircraft_db_id, $db_starts_array) ? $db_starts_array[$aircraft_db_id]->id : null);
 
     if (!array_key_exists($flarm_id, $previous_updates)) {
-        $result = register_aircraft($aircraft_db_id);
+        $result = register_aircraft($flarm_data);
         $debug->echo(sprintf("REGISTERED %s", $flarm_data->reg_call));
     }
 
@@ -342,14 +342,54 @@ function load_airports() : mixed {
     return null;
 }
 
-function register_aircraft(string $aircraft_id) : mixed {
-    $args = array("ID" => $aircraft_id);
+function register_aircraft(OgnSenderBeaconMessage $flarm_data) : mixed {
+
+    // overvliegende vliegtuigen niet registreren
+    if ($flarm_data->kalman_altitude > (VLIEGVELD_HOOGTE + 50))
+        return null;
+
+    // check if the aircraft is in the polygon of intrerest
+    if (defined('GEO_JSON')) {
+        if (file_exists(GEO_JSON)) {
+            $geojson = file_get_contents(GEO_JSON);
+            $geojson = json_decode($geojson);
+            $polygon = $geojson->features[0]->geometry->coordinates[0];
+            $point = array($flarm_data->longitude, $flarm_data->latitude);
+
+            if (!is_in_polygon($point, $polygon))
+                return null;
+        }
+    }
+
+    $args = array("ID" => $flarm_data->vliegtuig_id);
     if (isset($airport)) {
         $args["VLIEGVELD_ID"] = $airport->id;
     }
 
     $curl = new Curl();
     return $curl->exec_post(VLIEGTUIGEN_AANMELDEN, $args);
+}
+
+// check if the aircraft position is inside the polygon
+function is_in_polygon($point, $polygon) : bool {
+    $x = $point[0];
+    $y = $point[1];
+    $inside = false;
+    for ($i = 0, $j = count($polygon) - 1; $i < count($polygon); $j = $i++)
+    {
+        $xi = $polygon[$i][0];
+        $yi = $polygon[$i][1];
+        $xj = $polygon[$j][0];
+        $yj = $polygon[$j][1];
+
+        $intersect = (($yi > $y) != ($yj > $y)) &&
+            ($x < ($xj - $xi) * ($y - $yi) / ($yj - $yi) + $xi);
+        if ($intersect)
+        {
+            $inside = !$inside;
+        }
+    }
+    return $inside;
 }
 
 function check_lost()
@@ -391,6 +431,7 @@ function check_lost()
                     unset($kalman_speed_array[$flarm_data->flarm_id]);
                     unset($kalman_altitude_array[$flarm_data->flarm_id]);
                     unset($kalman_fpm_array[$flarm_data->flarm_id]);
+
                 }
             }
         }
