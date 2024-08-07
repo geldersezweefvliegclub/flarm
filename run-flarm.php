@@ -426,12 +426,15 @@ function check_lost()
                     {
                         $debug->echo(sprintf("------- PREDICTED LANDING: %s %s", $flarm_data->reg_call, $flarm_data->start_id));
                         register_landing($flarm_data->start_id);
+
+                        $flarm_data->status = GliderStatus::On_Ground;
                     }
                     unset($previous_updates[$flarm_data->flarm_id]);
                     unset($kalman_speed_array[$flarm_data->flarm_id]);
                     unset($kalman_altitude_array[$flarm_data->flarm_id]);
                     unset($kalman_fpm_array[$flarm_data->flarm_id]);
 
+                    continue;
                 }
             }
         }
